@@ -645,6 +645,7 @@ function pCrew(){
   `<div class="bar-f">${`<select class="sel" data-f="cM" aria-label="เดือน">${[...new Set([...months(),nextM(CUR)])].sort().reverse().map(x=>opt(x,mLabel(x),m)).join('')}</select>`}${vesselSel('cV')}
     <label class="search">${ic('search')}<input class="inp" id="crewq" data-fi="cQ" value="${esc(U.cQ)}" placeholder="ค้นหาชื่อ ชื่อเล่น เบอร์โทร"></label></div>
   <div class="chips" style="margin-bottom:14px">${[['','ทั้งหมด',base.length],['working','ทำงาน',cnt('working')],['resting','พัก',cnt('resting')],['resigned','ลาออก',cnt('resigned')]].map(([k,l,n])=>`<button class="chip ${U.cS===k?'on':''}" data-act="setF" data-k="cS" data-v="${k}">${l} <b>${n}</b></button>`).join('')}</div>
+  ${(()=>{const g=dupGroups();return g.length?`<div class="note" style="background:var(--warn-soft)"><span>พบชื่อซ้ำ ${g.length} ชื่อ: ${g.map(a=>esc(a[0].name)+' ('+a.length+' รายการ)').join(', ')} ตรวจแล้วลบหรือแก้รายการที่ซ้ำได้</span><button class="btn sm" data-act="setF" data-k="cQ" data-v="${esc(g[0][0].name.split(' ')[0])}">ดูรายการ</button></div>`:''})()}
   ${carried?`<div class="note"><span>${carried} คนยังใช้สถานะจากเดือนก่อน (ตัวเอียง) ตรวจแล้วกดยืนยันได้ทีเดียว</span><button class="btn sm dark" data-act="confirmStatus">${ic('check')}ยืนยันสถานะเดือนนี้</button></div>`:''}
   <div class="card flush">${list.length?tbl([['ชื่อ'],['เรือ'],['ตำแหน่ง'],['เงินเดือน','num'],['สถานะเดือนนี้'],['เอกสาร']],
     list.map(({c,st})=>{const ds=crewDocSt(c),d=ds.st;const tone=CST[st.s][1];
@@ -907,12 +908,19 @@ const advForm=(a,crewId)=>{const c0=C(crewId);openForm({title:a?'แก้ไข
 const expForm=(x,vid)=>openForm({title:x?'แก้ไขค่าใช้จ่าย':'บันทึกค่าใช้จ่าย',values:x||{date:TODAY,cat:'boat_fuel',vesselId:vid??(S.vessels[0]?.id||'')},
   fields:[{k:'date',label:'วันที่',type:'date',req:1},{k:'cat',label:'หมวด',type:'select',options:Object.entries(CAT),req:1},{k:'amount',label:'จำนวนเงิน (บาท)',type:'number',req:1},{k:'vesselId',label:'เรือ',type:'select',options:vOpts(true)},{k:'note',label:'รายละเอียด',type:'text',full:1,ph:'เช่น น้ำมันดีเซล 1,500 ลิตร'}],
   onSave:v=>{if(x)Object.assign(x,v);else S.exp.push({id:uid('e'),...v})},onDelete:x&&(()=>S.exp=S.exp.filter(y=>y!==x))});
-const crewFields=(isNew)=>[{k:'name',label:'ชื่อ-นามสกุล',req:1,full:1},{k:'nick',label:'ชื่อเล่น'},{k:'phone',label:'เบอร์โทร',type:'tel'},
+const normName=n=>String(n||'').trim().replace(/^(นางสาว|น\.ส\.|นาย|นาง|mr\.?|mrs\.?|ms\.?|miss)\s*/i,'').replace(/\s+/g,' ').toLowerCase();
+const normId=n=>String(n||'').replace(/\D/g,'');
+function dupByName(name,selfId){const k=normName(name);return k?S.crew.filter(c=>c.id!==selfId&&normName(c.name)===k):[]}
+function dupById(idc,selfId){const k=normId(idc);return k.length===13?S.crew.find(c=>c.id!==selfId&&normId(c.idcard)===k):null}
+const dupDesc=c=>{const st=statusOf(c,CUR).s;return `${c.name} (${vName(c.vesselId)}${st==='resigned'?' · ลาออกแล้ว':''})`};
+function dupGroups(){const g={};S.crew.forEach(c=>{const k=normName(c.name);if(k)(g[k]=g[k]||[]).push(c)});return Object.values(g).filter(a=>a.length>1)}
+const crewFields=(isNew,selfId)=>{let warned='';return [{k:'name',label:'ชื่อ-นามสกุล',req:1,full:1,hint:'ระบบจะเตือนถ้ามีชื่อนี้อยู่แล้ว',validate:v=>{const d=dupByName(v,selfId);if(!d.length){warned='';return ''}if(warned===normName(v))return '';warned=normName(v);
+    return `มีชื่อนี้ในระบบแล้ว: ${d.map(dupDesc).join(', ')}${d.some(c=>statusOf(c,CUR).s==='resigned')?' — ถ้าเป็นคนเดิมกลับมาทำงาน ให้เปลี่ยนสถานะคนเดิมแทน':''} ถ้าเป็นคนละคน กดบันทึกอีกครั้ง`}},{k:'nick',label:'ชื่อเล่น'},{k:'phone',label:'เบอร์โทร',type:'tel'},
   {k:'vesselId',label:'เรือ',type:'select',options:vOpts(),req:1},{k:'position',label:'ตำแหน่ง',type:'select',options:Object.entries(POS),req:1},
   ...(isNew?[{k:'salary',label:'เงินเดือน (บาท)',type:'number',req:1,hint:'ปกติ 12,000 บางคน 15,000'}]:[]),
-  {k:'start',label:'วันเริ่มงาน',type:'date',req:1},{k:'idcard',label:'เลขบัตรประชาชน',validate:v=>v&&!/^\d{13}$/.test(v.replace(/-/g,''))?'ต้องเป็นตัวเลข 13 หลัก':''},{k:'birth',label:'วันเกิด',type:'date'},
+  {k:'start',label:'วันเริ่มงาน',type:'date',req:1},{k:'idcard',label:'เลขบัตรประชาชน',validate:v=>{if(v&&!/^\d{13}$/.test(v.replace(/[-\s]/g,'')))return 'ต้องเป็นตัวเลข 13 หลัก';const d=dupById(v,selfId);return d?'เลขบัตรนี้เป็นของ '+dupDesc(d)+' อยู่แล้ว':''}},{k:'birth',label:'วันเกิด',type:'date'},
   {k:'address',label:'ที่อยู่',type:'textarea',full:1},{k:'emergency',label:'ผู้ติดต่อฉุกเฉิน',full:1,ph:'ชื่อ ความสัมพันธ์ เบอร์โทร'},{k:'note',label:'หมายเหตุ',type:'textarea',full:1},
-  ...(isNew?[{k:'sbno',label:'เลข Seaman Book'},{k:'sbexp',label:'Seaman Book หมดอายุ',type:'date'}]:[])];
+  ...(isNew?[{k:'sbno',label:'เลข Seaman Book'},{k:'sbexp',label:'Seaman Book หมดอายุ',type:'date'}]:[])]};
 const vesselFields=[{k:'name',label:'ชื่อเรือ',req:1},{k:'reg',label:'เลขทะเบียน',req:1},{k:'status',label:'สถานะ',type:'select',options:Object.entries(VST).map(([k,[l]])=>[k,l]),req:1},{k:'note',label:'หมายเหตุ',full:1,type:'textarea'}];
 
 const ACT={
@@ -926,7 +934,7 @@ const ACT={
     onSave:v=>{const id='c'+Date.now().toString(36);S.crew.push({id,note:v.note||'',name:v.name,nick:v.nick,phone:v.phone,vesselId:v.vesselId,position:v.position,start:v.start,idcard:v.idcard.replace(/-/g,''),birth:v.birth,address:v.address,emergency:v.emergency,
       salaryHist:[{from:mOf(v.start),amount:+v.salary}],bank:{bank:BANKS[0],acct:'',name:v.name},seaman:{no:v.sbno,issue:'',expiry:v.sbexp},events:[{date:v.start,text:'เริ่มงาน '+vName(v.vesselId)+' ตำแหน่ง'+POS[v.position]}]});
       S.status[id]={[mOf(v.start)]:'working'};}}),
-  editCrew:d=>{const c=C(d.id);openForm({title:'แก้ไขข้อมูลลูกเรือ',values:c,fields:crewFields(false),
+  editCrew:d=>{const c=C(d.id);openForm({title:'แก้ไขข้อมูลลูกเรือ',values:c,fields:crewFields(false,c.id),
     onSave:v=>{if(v.vesselId!==c.vesselId)c.events.push({date:TODAY,text:`ย้ายจาก ${vName(c.vesselId)} ไป ${vName(v.vesselId)}`});if(v.position!==c.position)c.events.push({date:TODAY,text:`เปลี่ยนตำแหน่งเป็น${POS[v.position]}`});v.idcard=v.idcard.replace(/-/g,'');Object.assign(c,v)},
     onDelete:()=>{S.crew=S.crew.filter(x=>x!==c);location.hash='#/crew'}})},
   editSeaman:d=>{const c=C(d.id);openForm({title:'Seaman Book · '+c.name,values:c.seaman,fields:[{k:'no',label:'เลขที่',req:1,full:1},{k:'issue',label:'วันออก',type:'date'},{k:'expiry',label:'วันหมดอายุ',type:'date',req:1},{k:'note',label:'หมายเหตุ',type:'textarea',full:1}],
