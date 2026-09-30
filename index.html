@@ -219,6 +219,7 @@ td.nw{white-space:nowrap}
 .checks .cg{grid-column:1/-1;font-size:12.5px;color:var(--muted);font-weight:600;padding:8px 0 2px}
 .ck{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px;cursor:pointer}.ck input{width:17px;height:17px;accent-color:var(--brand)}
 @media (max-width:520px){.checks{grid-template-columns:1fr}}
+.lnk{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--brand);text-decoration:none;font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}.lnk:hover{text-decoration:underline}.lnk svg.i{width:14px;height:14px}
 .note{background:var(--brand-soft);color:var(--text);border-radius:12px;padding:11px 14px;font-size:13.5px;margin-bottom:14px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .muted{color:var(--muted)}
 .mt{margin-top:14px}
@@ -321,6 +322,7 @@ const I={
  fish:'<path d="M2.5 12c3-5 9.5-6.5 13.5-3l5-3v12l-5-3c-4 3.5-10.5 2-13.5-3z"/><path d="M8 11.2v.1"/>',
  wallet:'<rect x="3" y="6" width="18" height="14" rx="2.5"/><path d="M3 10h18M16 15h2"/>',
  coins:'<circle cx="9" cy="9" r="6"/><path d="M14.6 10.3a6 6 0 1 1-4.3 4.3"/><path d="M9 6.5v5"/>',
+ link:'<path d="M10 14a5 5 0 0 0 7 0l3-3a5 5 0 0 0-7-7l-1 1"/><path d="M14 10a5 5 0 0 0-7 0l-3 3a5 5 0 0 0 7 7l1-1"/>',
  box:'<path d="M3.5 7.5 12 3l8.5 4.5v9L12 21l-8.5-4.5z"/><path d="M3.5 7.5 12 12l8.5-4.5M12 12v9"/>',
  receipt:'<path d="M5 3h14v18l-3-2-2 2-2-2-2 2-2-2-3 2z"/><path d="M9 8h6M9 12h6"/>',
  file:'<path d="M14 3H6.5A1.5 1.5 0 0 0 5 4.5v15A1.5 1.5 0 0 0 6.5 21h11a1.5 1.5 0 0 0 1.5-1.5V8z"/><path d="M14 3v5h5M9 13h6M9 17h4"/>',
@@ -481,7 +483,7 @@ function fromDb(v){const s=EMPTY();COLS.forEach(c=>s[c]=Object.values(v[c]||{}).
     c.seaman=Object.assign({no:'',issue:'',expiry:'',note:''},c.seaman);c.docs=Object.values(c.docs||{}).filter(x=>x&&x.id).map(x=>Object.assign({no:'',issue:'',note:''},x));c.bank=Object.assign({bank:'',acct:'',name:''},c.bank);['note','nick','phone','idcard','birth','address','emergency','start'].forEach(k=>c[k]=c[k]||'')});
   s.vessels.forEach(x=>{x.reg=x.reg||'';x.note=x.note||''});
   s.sales.forEach(x=>x.note=x.note||'');s.adv.forEach(x=>{x.note=x.note||'';x.vesselId=x.vesselId||''});s.exp.forEach(x=>{x.note=x.note||'';x.vesselId=x.vesselId||''});
-  s.items.forEach(x=>{x.prices=x.prices||{};x.unit=x.unit||'';x.note=x.note||'';x.cat=x.cat||'other'});s.suppliers.forEach(x=>{['phone','line','address','note'].forEach(k=>x[k]=x[k]||'')});
+  s.items.forEach(x=>{x.link=x.link||'';x.prices=x.prices||{};x.unit=x.unit||'';x.note=x.note||'';x.cat=x.cat||'other'});s.suppliers.forEach(x=>{['phone','line','address','note'].forEach(k=>x[k]=x[k]||'')});
   s.vdocs.forEach(x=>{x.note=x.note||'';x.vesselId=x.vesselId||'';x.no=x.no||'';x.issue=x.issue||''});
   s.vessels.sort((a,b)=>(b.main?1:0)-(a.main?1:0)||(a.order||0)-(b.order||0));
   return s}
@@ -830,6 +832,10 @@ function pTrip(id){
 /* items & suppliers */
 const ICAT={rope:'เชือก',net:'อวน / ทุ่น',equipment:'อุปกรณ์เรือ',engine:'อะไหล่เครื่องยนต์',oil:'น้ำมันหล่อลื่น / สารเคมี',food:'เสบียง',safety:'อุปกรณ์ความปลอดภัย',other:'อื่นๆ'};
 const SP=id=>S.suppliers.find(x=>x.id===id);
+const fixUrl=v=>{v=String(v||'').trim();if(!v)return '';return /^https?:\/\//i.test(v)?v:'https://'+v};
+const urlErr=v=>{if(!v)return '';try{const u=new URL(fixUrl(v));return u.hostname.includes('.')?'':'ลิงก์ไม่ถูกต้อง'}catch(e){return 'ลิงก์ไม่ถูกต้อง'}};
+const host=u=>{try{return new URL(u).hostname.replace(/^www\./,'')}catch(e){return 'ลิงก์'}};
+const lnk=(u,label)=>u?`<a class="lnk" href="${esc(u)}" target="_blank" rel="noopener noreferrer">${ic('link')}${esc(label||host(u))}</a>`:'';
 function itemPrices(it){return Object.entries(it.prices||{}).map(([sid,p])=>({sid,sp:SP(sid),...p})).filter(x=>x.sp).sort((a,b)=>a.price-b.price)}
 const chg=p=>{if(!p.prev||p.prev===p.price)return '';const d=(p.price-p.prev)/p.prev*100;return `<span class="sub" style="color:var(--${d>0?'bad':'ok'})">${d>0?'▲':'▼'} ${Math.abs(d).toFixed(0)}% จาก ${baht(p.prev)}</span>`};
 function pItems(){
@@ -847,16 +853,16 @@ function pItems(){
    <select class="sel" data-f="iC" aria-label="หมวด">${opt('','ทุกหมวด',U.iC)}${Object.entries(ICAT).map(([k,l])=>opt(k,l,U.iC)).join('')}</select>
    <select class="sel" data-f="iS" aria-label="ร้าน">${opt('','ทุกร้าน',U.iS)}${S.suppliers.map(x=>opt(x.id,x.name,U.iS)).join('')}</select></div>
   <div class="card flush">${list.length?tbl([['สินค้า'],['หมวด'],['ราคาถูกสุด','num'],['ร้านที่ถูกสุด'],['ร้าน','num'],['อัปเดตล่าสุด']],list.map(x=>{const ps=itemPrices(x),b=ps[0],last=ps.map(p=>p.date).sort().pop();
-    return `<tr class="click" data-href="#/items/${x.id}"><td><b>${esc(x.name)}</b><span class="sub">${[x.unit&&'ต่อ'+x.unit,x.note].filter(Boolean).map(esc).join(' · ')}</span></td><td class="nw">${ICAT[x.cat]||'-'}</td><td class="num">${b?`<b>${baht(b.price)}</b>`:'<span class="muted">-</span>'}</td><td>${b?esc(b.sp.name):'<span class="muted">ยังไม่มีราคา</span>'}</td><td class="num">${ps.length}</td><td class="nw muted">${last?dmy(last):'-'}</td></tr>`}))
+    return `<tr class="click" data-href="#/items/${x.id}"><td><b>${esc(x.name)}</b><span class="sub">${[x.unit&&'ต่อ'+x.unit,x.note].filter(Boolean).map(esc).join(' · ')}</span>${x.link?`<div>${lnk(x.link)}</div>`:''}</td><td class="nw">${ICAT[x.cat]||'-'}</td><td class="num">${b?`<b>${baht(b.price)}</b>`:'<span class="muted">-</span>'}</td><td>${b?esc(b.sp.name):'<span class="muted">ยังไม่มีราคา</span>'}</td><td class="num">${ps.length}</td><td class="nw muted">${last?dmy(last):'-'}</td></tr>`}))
     :empty(S.items.length?'ไม่พบสินค้าตามเงื่อนไขนี้':'ยังไม่มีสินค้า',S.items.length?'':'กด “เพิ่มสินค้า” เพื่อเริ่ม')}</div>`;
 }
 function pItem(id){
   const it=S.items.find(x=>x.id===id);if(!it)return empty('ไม่พบสินค้านี้')+'<p><a class="btn" href="#/items">กลับ</a></p>';
   const ps=itemPrices(it),lo=ps[0],hi=ps[ps.length-1];
   return `<a class="back" href="#/items">${ic('back')}รายการสินค้า</a>
-  ${ph(esc(it.name),`${ICAT[it.cat]||''}${it.unit?' · ต่อ'+esc(it.unit):''}${it.note?' · '+esc(it.note):''}`,`<button class="btn pri" data-act="addPrice" data-id="${id}">${ic('plus')}เพิ่ม / แก้ราคา</button><button class="btn" data-act="editItem" data-id="${id}">${ic('edit')}แก้ไข</button>`)}
+  ${ph(esc(it.name),`${ICAT[it.cat]||''}${it.unit?' · ต่อ'+esc(it.unit):''}${it.note?' · '+esc(it.note):''}`,`${it.link?`<a class="btn" href="${esc(it.link)}" target="_blank" rel="noopener noreferrer">${ic('link')}เปิดลิงก์สินค้า</a>`:''}<button class="btn pri" data-act="addPrice" data-id="${id}">${ic('plus')}เพิ่ม / แก้ราคา</button><button class="btn" data-act="editItem" data-id="${id}">${ic('edit')}แก้ไข</button>`)}
   <div class="g stats">${stat('ราคาถูกสุด',lo?baht(lo.price):'-',lo?esc(lo.sp.name):'','hot')}${stat('ราคาแพงสุด',hi?baht(hi.price):'-',hi&&ps.length>1?esc(hi.sp.name):'')}${stat('ส่วนต่าง',ps.length>1?baht(hi.price-lo.price):'-',ps.length>1?`แพงกว่ากัน ${((hi.price-lo.price)/lo.price*100).toFixed(0)}%`:'')}${stat('จำนวนร้าน',ps.length+' ร้าน')}</div>
-  <div class="card flush"><h2>เทียบราคาแต่ละร้าน</h2><div class="mt">${ps.length?tbl([['ร้านค้า'],['ราคา','num'],['อัปเดต'],['']],ps.map((p,i)=>`<tr><td><a href="#/supplier/${p.sid}" style="text-decoration:none"><b>${esc(p.sp.name)}</b></a>${i===0&&ps.length>1?' <span class="tag">ถูกสุด</span>':''}<span class="sub">${[p.sp.phone,p.note].filter(Boolean).map(esc).join(' · ')}</span></td><td class="num"><b>${baht(p.price)}</b>${chg(p)}</td><td class="nw muted">${dmy(p.date)}</td><td class="num"><button class="btn sm" data-act="addPrice" data-id="${id}" data-sp="${p.sid}">แก้ราคา</button></td></tr>`)):empty('ยังไม่มีราคา','กด “เพิ่ม / แก้ราคา” แล้วเลือกร้าน')}</div></div>`;
+  <div class="card flush"><h2>เทียบราคาแต่ละร้าน</h2><div class="mt">${ps.length?tbl([['ร้านค้า'],['ราคา','num'],['อัปเดต'],['']],ps.map((p,i)=>`<tr><td><a href="#/supplier/${p.sid}" style="text-decoration:none"><b>${esc(p.sp.name)}</b></a>${i===0&&ps.length>1?' <span class="tag">ถูกสุด</span>':''}<span class="sub">${[p.sp.phone,p.note].filter(Boolean).map(esc).join(' · ')}</span>${p.link?`<div>${lnk(p.link,'สั่งจากร้านนี้ · '+host(p.link))}</div>`:''}</td><td class="num"><b>${baht(p.price)}</b>${chg(p)}</td><td class="nw muted">${dmy(p.date)}</td><td class="num"><button class="btn sm" data-act="addPrice" data-id="${id}" data-sp="${p.sid}">แก้ราคา</button></td></tr>`)):empty('ยังไม่มีราคา','กด “เพิ่ม / แก้ราคา” แล้วเลือกร้าน')}</div></div>`;
 }
 function pSupplier(id){
   const x=SP(id);if(!x)return empty('ไม่พบร้านนี้')+'<p><a class="btn" href="#/items">กลับ</a></p>';
@@ -864,7 +870,7 @@ function pSupplier(id){
   return `<a class="back" href="#/items" data-act="toSup">${ic('back')}ร้านค้าทั้งหมด</a>
   ${ph(esc(x.name),[x.address,x.note].filter(Boolean).map(esc).join(' · '),`${x.phone?`<a class="btn pri" href="tel:${esc(x.phone.replace(/[^\d+]/g,''))}">โทร ${esc(x.phone)}</a>`:''}<button class="btn" data-act="editSup" data-id="${id}">${ic('edit')}แก้ไข</button>`)}
   <div class="g stats">${stat('เบอร์โทร',esc(x.phone||'-'))}${stat('LINE',esc(x.line||'-'))}${stat('สินค้าที่มีราคา',its.length+' รายการ',its.filter(i=>itemPrices(i)[0]?.sid===id).length+' รายการถูกที่สุด')}</div>
-  <div class="card flush"><h2>สินค้าและราคาจากร้านนี้</h2><div class="mt">${its.length?tbl([['สินค้า'],['ราคาร้านนี้','num'],['ถูกสุดที่อื่น','num'],['อัปเดต']],its.map(i=>{const p=i.prices[id],b=itemPrices(i).find(q=>q.sid!==id);return `<tr class="click" data-href="#/items/${i.id}"><td><b>${esc(i.name)}</b><span class="sub">${i.unit?'ต่อ'+esc(i.unit):''}</span></td><td class="num"><b>${baht(p.price)}</b>${chg(p)}</td><td class="num">${b?`${baht(b.price)}<span class="sub">${esc(b.sp.name)}</span>`:'<span class="muted">-</span>'}</td><td class="nw muted">${dmy(p.date)}</td></tr>`})):empty('ยังไม่มีสินค้าจากร้านนี้','เพิ่มราคาได้จากหน้าสินค้า')}</div></div>`;
+  <div class="card flush"><h2>สินค้าและราคาจากร้านนี้</h2><div class="mt">${its.length?tbl([['สินค้า'],['ราคาร้านนี้','num'],['ถูกสุดที่อื่น','num'],['อัปเดต']],its.map(i=>{const p=i.prices[id],b=itemPrices(i).find(q=>q.sid!==id);return `<tr class="click" data-href="#/items/${i.id}"><td><b>${esc(i.name)}</b><span class="sub">${i.unit?'ต่อ'+esc(i.unit):''}</span>${(p.link||i.link)?`<div>${lnk(p.link||i.link)}</div>`:''}</td><td class="num"><b>${baht(p.price)}</b>${chg(p)}</td><td class="num">${b?`${baht(b.price)}<span class="sub">${esc(b.sp.name)}</span>`:'<span class="muted">-</span>'}</td><td class="nw muted">${dmy(p.date)}</td></tr>`})):empty('ยังไม่มีสินค้าจากร้านนี้','เพิ่มราคาได้จากหน้าสินค้า')}</div></div>`;
 }
 
 /* reports */
@@ -1000,11 +1006,11 @@ const ACT={
   addSup:()=>supForm(),editSup:d=>supForm(SP(d.id)),
   addPrice:d=>{const it=S.items.find(x=>x.id===d.id);if(!S.suppliers.length){toast('เพิ่มร้านค้าก่อน ที่แท็บ “ร้านค้า”');return}
     const sid=d.sp||S.suppliers.find(x=>!it.prices[x.id])?.id||S.suppliers[0].id;const cur=it.prices[sid]||{};
-    openForm({title:'ราคา · '+it.name,values:{sid,price:cur.price??'',date:TODAY,note:cur.note||''},
+    openForm({title:'ราคา · '+it.name,values:{sid,price:cur.price??'',date:TODAY,note:cur.note||'',link:cur.link||''},
       fields:[{k:'sid',label:'ร้านค้า',type:'select',options:S.suppliers.map(x=>[x.id,x.name+(it.prices[x.id]?' (มีราคาแล้ว '+baht(it.prices[x.id].price)+')':'')]),req:1,full:1},
-        {k:'price',label:`ราคา (บาท${it.unit?' ต่อ'+it.unit:''})`,type:'number',req:1},{k:'date',label:'วันที่ได้ราคานี้',type:'date',req:1},{k:'note',label:'หมายเหตุ',type:'textarea',full:1,ph:'เช่น ซื้อ 10 ม้วนขึ้นไปลดเหลือ...'}],
-      onChange:(k,v,set)=>{if(k==='sid'){const p=it.prices[v.sid];set('price',p?p.price:'');set('note',p?p.note||'':'')}},
-      onSave:v=>{const old=it.prices[v.sid];const rec={price:+v.price,date:v.date,note:v.note||''};
+        {k:'price',label:`ราคา (บาท${it.unit?' ต่อ'+it.unit:''})`,type:'number',req:1},{k:'date',label:'วันที่ได้ราคานี้',type:'date',req:1},{k:'link',label:'ลิงก์สินค้าของร้านนี้',type:'url',full:1,ph:'https://...',validate:urlErr},{k:'note',label:'หมายเหตุ',type:'textarea',full:1,ph:'เช่น ซื้อ 10 ม้วนขึ้นไปลดเหลือ...'}],
+      onChange:(k,v,set)=>{if(k==='sid'){const p=it.prices[v.sid];set('price',p?p.price:'');set('note',p?p.note||'':'');set('link',p?p.link||'':'')}},
+      onSave:v=>{const old=it.prices[v.sid];const rec={price:+v.price,date:v.date,note:v.note||'',link:fixUrl(v.link)};
         if(old&&old.price!==+v.price){rec.prev=old.price;rec.prevDate=old.date}else if(old&&old.prev){rec.prev=old.prev;rec.prevDate=old.prevDate}
         it.prices[v.sid]=rec},
       onDelete:it.prices[sid]?()=>{const f=document.getElementById('f_sid');delete it.prices[f?f.value:sid]}:null})},
@@ -1055,8 +1061,8 @@ function tripForm(vid,start){
 function itemForm(it){let warned='';
   openForm({title:it?'แก้ไขสินค้า':'เพิ่มสินค้า',values:it||{cat:'rope'},
     fields:[{k:'name',label:'ชื่อสินค้า',req:1,full:1,ph:'เช่น เชือก PE 12 มม.',validate:v=>{const d=S.items.find(x=>x!==it&&normName(x.name)===normName(v));if(!d||warned===normName(v))return '';warned=normName(v);return 'มีสินค้าชื่อนี้แล้ว ถ้าต้องการเพิ่มจริง กดบันทึกอีกครั้ง'}},
-      {k:'cat',label:'หมวด',type:'select',options:Object.entries(ICAT),req:1},{k:'unit',label:'หน่วย',ph:'ม้วน / ชิ้น / ลิตร'},{k:'note',label:'หมายเหตุ',type:'textarea',full:1,ph:'ขนาด สเปก ยี่ห้อ'}],
-    onSave:v=>{if(it)Object.assign(it,v);else{const x={id:uid('i'),prices:{},...v};S.items.push(x);setTimeout(()=>{location.hash='#/items/'+x.id},0)}},
+      {k:'cat',label:'หมวด',type:'select',options:Object.entries(ICAT),req:1},{k:'unit',label:'หน่วย',ph:'ม้วน / ชิ้น / ลิตร'},{k:'link',label:'ลิงก์สินค้า',type:'url',full:1,ph:'เช่น https://shopee.co.th/... หรือ lazada, เว็บร้าน',validate:urlErr,hint:'ถ้าแต่ละร้านมีลิงก์ต่างกัน ใส่ตอนเพิ่มราคาของร้านนั้นได้'},{k:'note',label:'หมายเหตุ',type:'textarea',full:1,ph:'ขนาด สเปก ยี่ห้อ'}],
+    onSave:v=>{v.link=fixUrl(v.link);if(it)Object.assign(it,v);else{const x={id:uid('i'),prices:{},...v};S.items.push(x);setTimeout(()=>{location.hash='#/items/'+x.id},0)}},
     onDelete:it&&(()=>{S.items=S.items.filter(x=>x!==it);location.hash='#/items'})})}
 function supForm(x){let warned='';
   openForm({title:x?'แก้ไขร้านค้า':'เพิ่มร้านค้า',values:x||{},
