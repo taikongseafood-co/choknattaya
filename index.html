@@ -547,8 +547,9 @@ function months(){
   const s=new Set([CUR]);[...S.sales,...S.exp,...S.adv].forEach(x=>s.add(mOf(x.date)));
   return [...s].sort().reverse();
 }
-function rankAdv(m,vid,T){
-  const map={};S.adv.filter(a=>(T?inTrip(a,T):inM(a.date,m))&&(!vid||a.vesselId===vid)).forEach(a=>{(map[a.crewId]=map[a.crewId]||{id:a.crewId,total:0,n:0}).total+=a.amount;map[a.crewId].n++});
+const hbars=(items)=>{const mx=Math.max(1,...items.map(i=>i.v));return items.map(i=>`<div class="hb"><div class="n">${esc(i.l)}</div><div class="t"><i style="width:${i.v/mx*100}%"></i></div><div class="a">${baht(i.v)}</div></div>`).join('')};
+function rankAdv(pred,vid){
+  const map={};S.adv.filter(a=>pred(a)&&(!vid||a.vesselId===vid)).forEach(a=>{(map[a.crewId]=map[a.crewId]||{id:a.crewId,total:0,n:0}).total+=a.amount;map[a.crewId].n++});
   return Object.values(map).sort((a,b)=>b.total-a.total);
 }
 
@@ -576,9 +577,25 @@ function tripSum(t){const sales=S.sales.filter(x=>inTrip(x,t)),exp=S.exp.filter(
 function tripState(t,ts){if(!t.end)return ['กำลังออกเรือ','brand'];ts=ts||tripSum(t);return ts.pr.length&&ts.paidN===ts.pr.length?['จ่ายครบแล้ว','ok']:['รอจ่ายเงินเดือน','warn']}
 const tripSel=(key,vid)=>`<select class="sel" data-f="${key}" aria-label="รอบเรือ">${opt('','ทุกรอบ',U[key])}${[...S.trips].filter(t=>!vid||vid==='all'||t.vesselId===vid).sort((a,b)=>a.start<b.start?1:-1).map(t=>opt(t.id,`${tripName(t)} (${dmy(t.start).slice(0,5)}${t.end?'–'+dmy(t.end).slice(0,5):' →'})`,U[key])).join('')}</select>`;
 const curTrip=k=>U[k]&&S.trips.find(t=>t.id===U[k]);
+const latestTrip=vid=>{const ts=tripsOf(vid);return ts[ts.length-1]||null};
+const prevEndOf=t=>{const ts=tripsOf(t.vesselId),i=ts.indexOf(t);return i>0?(ts[i-1].end||''):''};
+function curStart(vid){const ts=(vid?[latestTrip(vid)]:S.vessels.map(v=>latestTrip(v.id))).filter(Boolean);if(!ts.length)return '';return ts.map(t=>t.start).sort()[0]}
+function inCur(x){if(x.vesselId){const lt=latestTrip(x.vesselId);if(lt)return x.date>prevEndOf(lt)}const cs=curStart('');return !cs||x.date>=cs}
+const PKEYS={sV:'sP',aV:'aP',eV:'eP'};
+function inPeriod(key,x){const p=U[key]||'cur';if(p==='all')return true;if(p==='cur')return inCur(x);if(p.startsWith('m:'))return mOf(x.date)===p.slice(2);
+  if(p.startsWith('t:')){const t=S.trips.find(y=>y.id===p.slice(2));return !!t&&inTrip(x,t)}return true}
+function periodSel(key,vid){const ts=[...S.trips].filter(t=>!vid||vid==='all'||vid==='common'||t.vesselId===vid).sort((a,b)=>a.start<b.start?1:-1);
+  return `<select class="sel" data-f="${key}" aria-label="ช่วงเวลา"><optgroup label="รอบเรือ">${opt('cur','รอบปัจจุบัน',U[key])}${ts.map(t=>opt('t:'+t.id,`${tripName(t)} (${dmy(t.start).slice(0,5)}${t.end?'–'+dmy(t.end).slice(0,5):' →'})`,U[key])).join('')}</optgroup><optgroup label="เดือน">${months().map(m=>opt('m:'+m,mLabel(m),U[key])).join('')}</optgroup>${opt('all','ทั้งหมดตั้งแต่เริ่ม',U[key])}</select>`}
+function periodText(key,vid){const p=U[key]||'cur';
+  if(p==='all')return 'ทั้งหมดตั้งแต่เริ่มใช้งาน';if(p.startsWith('m:'))return 'เดือน'+mLabel(p.slice(2));
+  if(p.startsWith('t:')){const t=S.trips.find(y=>y.id===p.slice(2));return t?`${tripName(t)} · ${tripRange(t)}`:''}
+  if(vid&&vid!=='all'&&vid!=='common'){const t=latestTrip(vid);if(t)return `รอบปัจจุบัน: ${tripName(t)} · ${tripRange(t)}${t.end?' (เข้าฝั่งแล้ว รายการหลังจากนี้นับเข้ารอบถัดไป)':''}`;const c0=curStart('');return c0?`ลำนี้ยังไม่เปิดรอบ แสดงตั้งแต่ ${dmy(c0)}`:'ยังไม่มีรอบเรือ แสดงทั้งหมด'}
+  const open=S.trips.filter(t=>!t.end);const cs=curStart('');return cs?`รอบปัจจุบันของทุกลำ · ตั้งแต่ ${dmy(cs)}${open.length?` · กำลังออกเรือ ${open.length} ลำ`:''}`:'ยังไม่มีรอบเรือ แสดงทั้งหมด'}
+const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+function dateList(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'T00:00:00');while(d<=e&&out.length<500){out.push(iso(d));d.setDate(d.getDate()+1)}return out}
 
 /* ---------- ui state ---------- */
-const U={iQ:'',iC:'',iS:'',iTab:'items',dK:'',sT:'',aT:'',eT:'',tV:'',sM:CUR,sV:'',cM:CUR,cV:'',cS:'',cQ:'',pM:CUR,pV:'',aM:CUR,aV:'',eM:CUR,eV:'all',eC:'',dT:'crew',dS:'',rT:'sales',rM:CUR,rV:'',tab:'info',reveal:{}};
+const U={sP:'cur',aP:'cur',eP:'cur',iQ:'',iC:'',iS:'',iTab:'items',dK:'',sT:'',aT:'',eT:'',tV:'',sM:CUR,sV:'',cM:CUR,cV:'',cS:'',cQ:'',pM:CUR,pV:'',aM:CUR,aV:'',eM:CUR,eV:'all',eC:'',dT:'crew',dS:'',rT:'sales',rM:CUR,rV:'',tab:'info',reveal:{}};
 const opt=(v,l,cur)=>`<option value="${esc(v)}"${String(v)===String(cur)?' selected':''}>${esc(l)}</option>`;
 const monthSel=(key,withAll)=>`<select class="sel" data-f="${key}" aria-label="เดือน">${withAll?opt('all','ทุกเดือน',U[key]):''}${months().map(m=>opt(m,mLabel(m),U[key])).join('')}</select>`;
 const vesselSel=(key,extra)=>`<select class="sel" data-f="${key}" aria-label="เรือ">${opt('','ทุกลำ',U[key])}${extra||''}${S.vessels.map(v=>opt(v.id,v.name,U[key])).join('')}</select>`;
@@ -586,65 +603,64 @@ const ph=(t,p,acts='')=>`<div class="ph"><div><h1>${t}</h1>${p?`<p>${p}</p>`:''}
 const stat=(l,v,s='',cls='',href='')=>href?`<a class="stat ${cls}" href="${href}"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</a>`:`<div class="stat ${cls}"><div class="l">${l}</div><div class="v">${v}</div>${s?`<div class="s">${s}</div>`:''}</div>`;
 const empty=(t,s='')=>`<div class="empty"><b>${t}</b>${s}</div>`;
 const tbl=(head,rows,foot='')=>`<div class="tw"><table><thead><tr>${head.map(h=>`<th class="${h[1]||''}">${h[0]}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody>${foot?`<tfoot>${foot}</tfoot>`:''}</table></div>`;
-function dayChart(m,vid){
-  const n=dim(m),vals=[];let mx=0;
-  const ld=[...S.sales].filter(s=>(!vid||s.vesselId===vid)).map(s=>s.date).sort().pop();
-  for(let d=1;d<=n;d++){const date=`${m}-${String(d).padStart(2,'0')}`;const rows=S.sales.filter(s=>s.date===date&&(!vid||s.vesselId===vid));const v=sum(rows,x=>x.amount),k=sum(rows,x=>x.kg);vals.push({d,date,v,k});mx=Math.max(mx,v)}
-  const top=Math.ceil((mx||1)/20000)*20000;
+function dayChart(rows){
+  if(!rows.length) return empty('ยังไม่มียอดขายในช่วงนี้');
+  const ds=rows.map(r=>r.date).sort();let list=dateList(ds[0],ds[ds.length-1]);if(list.length<7)list=dateList(iso(new Date(new Date(ds[ds.length-1]+'T00:00:00').getTime()-6*864e5)),ds[ds.length-1]);
+  list=list.slice(-62);
+  const vals=list.map(date=>{const r=rows.filter(s=>s.date===date);return {date,v:sum(r,x=>x.amount),k:sum(r,x=>x.kg)}});const mx=Math.max(1,...vals.map(x=>x.v)),ld=ds[ds.length-1];
+  const top=Math.ceil(mx/20000)*20000;
   const cols=vals.map(x=>`<div class="col ${x.date===ld?'hl':''} ${x.v?'':'zero'}"><i style="height:${Math.max(x.v/top*100,x.v?2:1)}%"></i><div class="tip">${thd(x.date)} · ${x.v?baht(x.v)+' · '+kg(x.k):'ไม่มียอดขาย'}</div></div>`).join('');
   const gl=[.5,1].map(p=>`<div class="gl" style="bottom:${p*100}%"><span>${num(top*p/1000)}k</span></div>`).join('');
-  const xl=vals.map(x=>`<span>${x.d===1||x.d%5===0?x.d:''}</span>`).join('');
+  const step=list.length>40?7:5;
+  const xl=vals.map((x,i)=>`<span>${i===0||(+x.date.slice(8,10))===1?(+x.date.slice(8,10))+'/'+(+x.date.slice(5,7)):i%step===0?+x.date.slice(8,10):''}</span>`).join('');
   return `<div class="chart">${gl}${cols}</div><div class="xl">${xl}</div>`;
 }
-const hbars=(items)=>{const mx=Math.max(1,...items.map(i=>i.v));return items.map(i=>`<div class="hb"><div class="n">${esc(i.l)}</div><div class="t"><i style="width:${i.v/mx*100}%"></i></div><div class="a">${baht(i.v)}</div></div>`).join('')};
 
 /* ---------- pages ---------- */
 function pDashboard(){
   const ld=S.sales.map(s=>s.date).sort().pop();
   const lr=ld?S.sales.filter(s=>s.date===ld):[];
-  const m=ld?mOf(ld):CUR, ms=S.sales.filter(s=>mOf(s.date)===m), dayCount=new Set(ms.map(s=>s.date)).size;
-  const pms=S.sales.filter(s=>mOf(s.date)===prevM(m));
-  const cmp=(a,b)=>b?`${a>=b?'สูงกว่า':'ต่ำกว่า'}เดือนก่อน ${Math.abs(Math.round((a-b)/b*100))}%`:'';
-  const ended=S.trips.filter(t=>t.end).map(t=>({t,ts:tripSum(t)})).filter(x=>x.ts.paidN<x.ts.pr.length), unpaidAmt=sum(ended,x=>x.ts.unpaid), openT=S.trips.filter(t=>!t.end), expM=sum(S.exp.filter(x=>mOf(x.date)===CUR),x=>x.amount);
+  const ms=S.sales.filter(inCur), dayCount=new Set(ms.map(s=>s.date)).size, cs=curStart('');
+  const ended=S.trips.filter(t=>t.end).map(t=>({t,ts:tripSum(t)})).filter(x=>x.ts.paidN<x.ts.pr.length), unpaidAmt=sum(ended,x=>x.ts.unpaid), openT=S.trips.filter(t=>!t.end), expM=sum(S.exp.filter(inCur),x=>x.amount), atSea=new Set(openT.flatMap(t=>t.crew||[])).size;
   const docs=allDocs(), att=docs.filter(attention);
   const act=S.crew.filter(c=>statusOf(c,CUR).s==='working').length, tot=S.crew.filter(c=>{const s=statusOf(c,CUR).s;return s&&s!=='resigned'}).length;
   const fishing=S.vessels.filter(v=>v.status==='fishing').length;
-  const top=rankAdv(CUR,'').slice(0,5);
+  const top=rankAdv(inCur,'').slice(0,5);
   const recent=[...S.sales].sort((a,b)=>a.date<b.date?1:-1).slice(0,6);
   return ph('ภาพรวมธุรกิจ',`ข้อมูล ณ ${thd(TODAY)}`,`<button class="btn pri" data-act="addSale">${ic('plus')}บันทึกยอดขาย</button>`)+
   `<div class="hero-row">
     <div class="hero"><div class="l">${ic('fish')}ยอดขายล่าสุด</div><div class="d">${ld?thd(ld):'ยังไม่มียอดขาย'}</div>
       <div class="big">${baht(sum(lr,x=>x.amount))}</div><div class="kg">${kg(sum(lr,x=>x.kg))}</div>
       <div class="ves">${lr.map(x=>esc(vName(x.vesselId))).join(', ')||'-'}</div></div>
-    <div class="stat mstat"><div><div class="l">ยอดขายเดือน${TH_MF[+m.slice(5,7)-1]}</div><div class="v">${baht(sum(ms,x=>x.amount))}</div></div><div class="s">${dayCount} วันที่มียอดขาย</div></div>
-    <div class="stat mstat"><div><div class="l">น้ำหนักปลาเดือนนี้</div><div class="v">${kg(sum(ms,x=>x.kg))}</div></div><div class="s">เฉลี่ย ${kg(dayCount?sum(ms,x=>x.kg)/dayCount:0)} ต่อวัน</div></div>
+    <div class="stat mstat"><div><div class="l">ยอดขายรอบปัจจุบัน</div><div class="v">${baht(sum(ms,x=>x.amount))}</div></div><div class="s">${cs?'ตั้งแต่ '+dmy(cs)+' · ':''}${dayCount} วันที่มียอดขาย</div></div>
+    <div class="stat mstat"><div><div class="l">น้ำหนักปลารอบปัจจุบัน</div><div class="v">${kg(sum(ms,x=>x.kg))}</div></div><div class="s">เฉลี่ย ${kg(dayCount?sum(ms,x=>x.kg)/dayCount:0)} ต่อวัน</div></div>
   </div>
   <div class="g stats">
     ${stat('เรือทั้งหมด',S.vessels.length+' ลำ',`กำลังออกเรือ ${openT.length} ลำ`,'','#/trips')}
-    ${stat('ลูกเรือ',tot+' คน',`ทำงานเดือนนี้ ${act} คน`,'','#/crew')}
+    ${stat('ลูกเรือ',tot+' คน',openT.length?`ออกเรืออยู่ ${atSea} คน`:`ทำงานเดือนนี้ ${act} คน`,'','#/crew')}
     ${stat('เงินเดือนรอจ่าย',baht(unpaidAmt),ended.length?`${ended.length} รอบที่เข้าฝั่งแล้ว`:'ไม่มีค้างจ่าย',ended.length?'hot':'','#/payroll')}
-    ${stat('ค่าใช้จ่ายเดือนนี้',baht(expM),'','','#/expenses')}
+    ${stat('ค่าใช้จ่ายรอบปัจจุบัน',baht(expM),cs?'ตั้งแต่ '+dmy(cs):'','','#/expenses')}
     ${stat('เอกสารต้องดูแล',att.length+' รายการ','หมดอายุหรือเหลือไม่เกิน 30 วัน',att.length?'hot':'','#/documents')}
   </div>
   <div class="two">
-    <div class="card"><h2>ยอดขายรายวัน · ${mLabel(m)}<a href="#/sales">ดูทั้งหมด</a></h2>${dayChart(m)}</div>
+    <div class="card"><h2>ยอดขายรายวัน · รอบปัจจุบัน<a href="#/sales">ดูทั้งหมด</a></h2>${dayChart(ms)}</div>
     <div class="card"><h2>เอกสารที่ต้องดูแล<a href="#/documents">ดูทั้งหมด</a></h2>
       ${att.length?att.slice(0,6).map(d=>`<div style="display:flex;justify-content:space-between;gap:10px;padding:9px 0;border-bottom:1px solid var(--line)"><div><div style="font-weight:500">${esc(d.owner)}</div><div class="muted" style="font-size:12.5px">${esc(d.name)} · ${daysTxt(d.st.d)}</div></div>${badge(d.st.t,d.st.tone)}</div>`).join(''):empty('เอกสารทุกฉบับยังไม่หมดอายุ')}</div>
   </div>
   <div class="halves">
     <div class="card flush"><h2>ยอดขายล่าสุด<a href="#/sales">ดูทั้งหมด</a></h2><div class="mt">${tbl([['วันที่'],['เรือ'],['น้ำหนัก','num'],['ยอดขาย','num']],recent.map(s=>`<tr class="click" data-act="editSale" data-id="${s.id}"><td class="nw">${dmy(s.date)}</td><td>${esc(vName(s.vesselId))}</td><td class="num">${kg(s.kg)}</td><td class="num"><b>${baht(s.amount)}</b></td></tr>`))}</div></div>
-    <div class="card"><h2>เบิกเงินสูงสุดเดือนนี้<a href="#/advances">ดูทั้งหมด</a></h2>${top.length?rankList(top):empty('ยังไม่มีการเบิกเงินเดือนนี้')}</div>
+    <div class="card"><h2>เบิกเงินสูงสุดรอบนี้<a href="#/advances">ดูทั้งหมด</a></h2>${top.length?rankList(top):empty('ยังไม่มีการเบิกเงินรอบนี้')}</div>
   </div>`;
 }
 function rankList(list){const mx=list[0]?.total||1;return `<ul class="rank">${list.map((r,i)=>{const c=C(r.id);return `<li data-href="#/crew/${r.id}"><div class="no">${i+1}</div><div><div class="nm">${esc(c?.name.split(' ')[0]||'-')} <span class="muted" style="font-weight:400;font-size:13px">${esc(c?.name.split(' ').slice(1).join(' ')||'')}</span></div><div class="sub">${esc(vName(c?.vesselId))} · ${r.n} ครั้ง</div><div class="bar"><i style="width:${r.total/mx*100}%"></i></div></div><div class="amt">${baht(r.total)}</div></li>`}).join('')}</ul>`}
 
 function pSales(){
-  const T=curTrip('sT');const rows=S.sales.filter(s=>(T?inTrip(s,T):inM(s.date,U.sM))&&(!U.sV||s.vesselId===U.sV)).sort((a,b)=>a.date<b.date?1:-1);
+  const rows=S.sales.filter(s=>inPeriod('sP',s)&&(!U.sV||s.vesselId===U.sV)).sort((a,b)=>a.date<b.date?1:-1);
   const dcount=new Set(rows.map(r=>r.date)).size, amt=sum(rows,r=>r.amount), w=sum(rows,r=>r.kg);
   return ph('ยอดขายปลา','บันทึกยอดขายรวมต่อวันของแต่ละลำ',`<button class="btn pri" data-act="addSale">${ic('plus')}บันทึกยอดขาย</button>`)+
-  `<div class="bar-f">${T?'':monthSel('sM',true)}${vesselSel('sV')}${tripSel('sT',U.sV)}</div>
+  `<div class="bar-f">${vesselSel('sV')}${periodSel('sP',U.sV)}</div><p class="muted" style="margin:-6px 0 14px;font-size:13.5px">${periodText('sP',U.sV)}</p>
   <div class="g stats">${stat('ยอดขายรวม',baht(amt),`${rows.length} รายการ`)}${stat('น้ำหนักรวม',kg(w))}${stat('ยอดขายเฉลี่ยต่อวัน',baht(dcount?amt/dcount:0),`${dcount} วันที่มียอดขาย`)}${stat('น้ำหนักเฉลี่ยต่อวัน',kg(dcount?w/dcount:0))}</div>
-  ${U.sM!=='all'&&!T?`<div class="card" style="margin-bottom:14px"><h2>ยอดขายรายวัน</h2>${dayChart(U.sM,U.sV)}</div>`:''}
+  ${U.sP!=='all'&&rows.length?`<div class="card" style="margin-bottom:14px"><h2>ยอดขายรายวัน</h2>${dayChart(rows)}</div>`:''}
   <div class="card flush">${rows.length?tbl([['วันที่'],['เรือ'],['น้ำหนัก','num'],['ยอดขาย','num'],['ราคาเฉลี่ย/กก.','num'],['']],
     rows.map(s=>`<tr class="click" data-act="editSale" data-id="${s.id}"><td class="nw">${dmy(s.date)}</td><td>${esc(vName(s.vesselId))}<span class="sub">${[tripTag(s),s.note].filter(Boolean).map(esc).join(' · ')}</span></td><td class="num">${kg(s.kg)}</td><td class="num"><b>${baht(s.amount)}</b></td><td class="num muted">${baht(s.kg?s.amount/s.kg:0)}</td><td class="num">${ic('edit')}</td></tr>`),
     `<tr><td colspan="2">รวม</td><td class="num">${kg(w)}</td><td class="num">${baht(amt)}</td><td class="num">${baht(w?amt/w:0)}</td><td></td></tr>`)
@@ -676,7 +692,7 @@ function pCrew(){
 function pCrewProfile(id){
   const c=C(id);if(!c) return empty('ไม่พบลูกเรือคนนี้')+'<p><a href="#/crew" class="btn">กลับไปหน้าลูกเรือ</a></p>';
   const st=statusOf(c,CUR), d=dst(c.seaman.expiry), allAdv=S.adv.filter(a=>a.crewId===id).sort((a,b)=>a.date<b.date?1:-1);
-  const monthAdv=sum(advFor(id,CUR),a=>a.amount), rv=U.reveal;
+  const monthAdv=sum(S.adv.filter(a=>a.crewId===id&&inCur(a)),a=>a.amount), rv=U.reveal;
   const mask=(s,k,show=4)=>rv[k]?esc(s):'•'.repeat(Math.max(0,s.length-show))+esc(s.slice(-show));
   const tabs=[['info','ข้อมูลส่วนตัว'],['seaman','เอกสาร'],['bank','บัญชีธนาคาร'],['salary','เงินเดือน'],['adv','เงินเบิก'],['history','ประวัติการทำงาน']];
   let body='';
@@ -689,12 +705,12 @@ function pCrewProfile(id){
     <div><dt>ธนาคาร</dt><dd>${esc(c.bank.bank)}</dd></div><div><dt>เลขบัญชี</dt><dd>${mask(c.bank.acct,'ac'+id)} <button class="reveal" data-act="reveal" data-k="ac${id}">${rv['ac'+id]?'ซ่อน':'แสดง'}</button></dd></div><div><dt>ชื่อบัญชี</dt><dd>${esc(c.bank.name)}</dd></div><div><dt>หมายเหตุ</dt><dd>${esc(c.bank.note||'-')}</dd></div></dl></div>`;
   if(U.tab==='salary'){const h=[...c.salaryHist].sort((a,b)=>a.from<b.from?1:-1);
     const pays=[...S.trips].sort((a,b)=>a.start<b.start?1:-1).map(t=>({t,r:tripPayRows(t).find(r=>r.c.id===id)})).filter(x=>x.r);const owe=pays.filter(x=>x.t.end&&!x.r.paid);
-    body=`<div class="g stats">${stat('เงินเดือนปัจจุบัน',baht(salaryOf(c,CUR)))}${stat('เบิกเดือนนี้',baht(monthAdv))}${stat('ยังไม่ได้รับ',baht(sum(owe,x=>x.r.net)),owe.length+' รอบที่จบแล้ว',owe.length?'hot':'')}</div>
+    body=`<div class="g stats">${stat('เงินเดือนปัจจุบัน',baht(salaryOf(c,CUR)))}${stat('เบิกรอบนี้',baht(monthAdv))}${stat('ยังไม่ได้รับ',baht(sum(owe,x=>x.r.net)),owe.length+' รอบที่จบแล้ว',owe.length?'hot':'')}</div>
     <div class="halves"><div class="card flush"><h2>ประวัติเงินเดือน<button class="btn sm" data-act="editSalary" data-id="${id}">${ic('edit')}ปรับเงินเดือน</button></h2><div class="mt">${tbl([['มีผลตั้งแต่'],['เงินเดือน','num']],h.map(x=>`<tr><td>${mLabel(x.from)}${x.note?`<span class="sub">${esc(x.note)}</span>`:''}</td><td class="num"><b>${baht(x.amount)}</b></td></tr>`))}</div></div>
     <div class="card flush"><h2>เงินเดือนตามรอบเรือ</h2><div class="mt">${pays.length?tbl([['รอบเรือ'],['เงินเดือน','num'],['เงินเบิก','num'],['สุทธิ','num'],['สถานะ']],pays.map(({t,r})=>`<tr class="click" data-href="#/trips/${t.id}"><td class="nw">${esc(tripName(t))}<span class="sub">${tripRange(t)}</span></td><td class="num">${baht(r.pay)}</td><td class="num">${baht(r.adv)}</td><td class="num"><b class="${r.net<0?'neg':''}">${baht(r.net)}</b></td><td>${!t.end?badge('กำลังออกเรือ','brand'):r.paid?badge('จ่ายแล้ว','ok'):badge('ยังไม่จ่าย','warn')}</td></tr>`)):empty('ยังไม่มีข้อมูล')}</div></div></div>`}
   if(U.tab==='adv'){const tot=sum(allAdv,a=>a.amount);const byM={};allAdv.forEach(a=>byM[mOf(a.date)]=(byM[mOf(a.date)]||0)+a.amount);
     const mm=Object.keys(byM).sort().reverse();
-    body=`<div class="g stats">${stat('ยอดเบิกทั้งหมด',baht(tot),'','hot')}${stat('จำนวนครั้ง',allAdv.length+' ครั้ง')}${stat('เฉลี่ยต่อครั้ง',baht(allAdv.length?tot/allAdv.length:0))}${stat('เบิกเดือนนี้',baht(monthAdv))}</div>
+    body=`<div class="g stats">${stat('ยอดเบิกทั้งหมด',baht(tot),'','hot')}${stat('จำนวนครั้ง',allAdv.length+' ครั้ง')}${stat('เฉลี่ยต่อครั้ง',baht(allAdv.length?tot/allAdv.length:0))}${stat('เบิกรอบนี้',baht(monthAdv))}</div>
     <div class="halves"><div class="card"><h2>ยอดเบิกรายเดือน</h2>${mm.length?hbars(mm.map(m=>({l:mLabel(m),v:byM[m]}))):empty('ยังไม่เคยเบิกเงิน')}</div>
     <div class="card flush"><h2>ประวัติการเบิก<button class="btn sm pri" data-act="addAdv" data-crew="${id}">${ic('plus')}บันทึกการเบิก</button></h2><div class="mt">${allAdv.length?tbl([['วันที่'],['รายละเอียด'],['จำนวนเงิน','num']],allAdv.map(a=>`<tr class="click" data-act="editAdv" data-id="${a.id}"><td class="nw">${dmy(a.date)}</td><td>${esc(a.note||'-')}</td><td class="num"><b>${baht(a.amount)}</b></td></tr>`),`<tr><td colspan="2">รวม</td><td class="num">${baht(tot)}</td></tr>`):empty('ยังไม่เคยเบิกเงิน')}</div></div></div>`}
   if(U.tab==='history'){const ms=[...new Set([...months(),'2026-06','2026-07'])].sort().reverse().slice(0,6);
@@ -703,7 +719,7 @@ function pCrewProfile(id){
   return `<a class="back" href="#/crew">${ic('back')}ลูกเรือทั้งหมด</a>
   <div class="ph"><div class="prof"><div class="av">${esc(c.name.slice(0,1))}</div><div><h1>${esc(c.name)}</h1><p>${POS[c.position]} · ${esc(vName(c.vesselId))} · ${st.s?badge(CST[st.s][0],CST[st.s][1]):''}</p></div></div>
   <div class="acts"><button class="btn" data-act="addAdv" data-crew="${id}">${ic('coins')}บันทึกการเบิก</button><button class="btn" data-act="editCrew" data-id="${id}">${ic('edit')}แก้ไขข้อมูล</button></div></div>
-  <div class="g stats">${stat('เงินเดือน',baht(salaryOf(c,CUR)))}${stat('เบิกเดือนนี้',baht(monthAdv))}${stat('เบิกทั้งหมด',baht(sum(allAdv,a=>a.amount)),allAdv.length+' ครั้ง')}${(()=>{const w=crewDocSt(c);return stat('เอกสาร',w.st.t,w.n>1?esc(w.name)+' · '+daysTxt(w.st.d):daysTxt(w.st.d),w.st.k==='ok'?'':'hot')})()}</div>
+  <div class="g stats">${stat('เงินเดือน',baht(salaryOf(c,CUR)))}${stat('เบิกรอบนี้',baht(monthAdv))}${stat('เบิกทั้งหมด',baht(sum(allAdv,a=>a.amount)),allAdv.length+' ครั้ง')}${(()=>{const w=crewDocSt(c);return stat('เอกสาร',w.st.t,w.n>1?esc(w.name)+' · '+daysTxt(w.st.d):daysTxt(w.st.d),w.st.k==='ok'?'':'hot')})()}</div>
   <div class="tabs">${tabs.map(([k,l])=>`<button class="${U.tab===k?'on':''}" data-act="setF" data-k="tab" data-v="${k}">${l}</button>`).join('')}</div>${body}`;
 }
 
@@ -722,13 +738,12 @@ function pPayroll(){
 }
 
 function pAdvances(){
-  const T=curTrip('aT');
-  const rows=S.adv.filter(a=>(T?inTrip(a,T):inM(a.date,U.aM))&&(!U.aV||a.vesselId===U.aV)).sort((a,b)=>a.date<b.date?1:-1);
-  const rank=rankAdv(U.aM,U.aV,T),tot=sum(rows,a=>a.amount);
-  const lab=T?'ยอดเบิกรวมรอบนี้':U.aM==='all'?'ยอดเบิกรวม':'ยอดเบิกรวมเดือนนี้';
+  const rows=S.adv.filter(a=>inPeriod('aP',a)&&(!U.aV||a.vesselId===U.aV)).sort((a,b)=>a.date<b.date?1:-1);
+  const rank=rankAdv(a=>inPeriod('aP',a),U.aV),tot=sum(rows,a=>a.amount);
+  const lab=U.aP==='cur'?'ยอดเบิกรวมรอบนี้':U.aP.startsWith('m:')?'ยอดเบิกรวมเดือนนี้':U.aP==='all'?'ยอดเบิกรวม':'ยอดเบิกรวมรอบนี้';
   const dTag=a=>{const t=tripFor(a.vesselId,a.date);return t?(t.end?`หักรอบที่ ${tripNo(t)}`:`จะหักตอนจบรอบที่ ${tripNo(t)}`):'หักรอบถัดไป'};
   return ph('เงินเบิกล่วงหน้า','ลูกเรือแต่ละคนเบิกไปเท่าไร หักจากเงินเดือนตอนจบรอบเรือโดยอัตโนมัติ',`<button class="btn pri" data-act="addAdv">${ic('plus')}บันทึกการเบิก</button>`)+
-  `<div class="bar-f">${T?'':monthSel('aM',true)}${vesselSel('aV')}${tripSel('aT',U.aV)}</div>
+  `<div class="bar-f">${vesselSel('aV')}${periodSel('aP',U.aV)}</div><p class="muted" style="margin:-6px 0 14px;font-size:13.5px">${periodText('aP',U.aV)}</p>
   <div class="g stats">${stat(lab,baht(tot),'','hot')}${stat('จำนวนรายการ',rows.length+' ครั้ง')}${stat('จำนวนคนที่เบิก',rank.length+' คน')}${stat('เฉลี่ยต่อคน',baht(rank.length?tot/rank.length:0))}</div>
   <div class="halves">
     <div class="card"><h2>อันดับการเบิกเงิน</h2>${rank.length?rankList(rank):empty('ไม่มีการเบิกเงินในช่วงนี้')}</div>
@@ -738,16 +753,15 @@ function pAdvances(){
 
 function pExpenses(){
   const vf=x=>U.eV==='all'||(U.eV==='common'?!x.vesselId:x.vesselId===U.eV);
-  const T=curTrip('eT'),pm=x=>T?inTrip(x,T):inM(x.date,U.eM);
+  const pm=x=>inPeriod('eP',x);
   const rows=S.exp.filter(x=>pm(x)&&vf(x)&&(!U.eC||x.cat===U.eC)).sort((a,b)=>a.date<b.date?1:-1);
   const catRows=S.exp.filter(x=>pm(x)&&vf(x));
   const byCat=Object.keys(CAT).map(k=>({k,l:CAT[k],v:sum(catRows.filter(x=>x.cat===k),x=>x.amount)})).filter(x=>x.v).sort((a,b)=>b.v-a.v);
   const tot=sum(rows,x=>x.amount);
-  const prev=U.eM!=='all'&&!T?sum(S.exp.filter(x=>mOf(x.date)===prevM(U.eM)&&vf(x)&&(!U.eC||x.cat===U.eC)),x=>x.amount):0;
   return ph('ค่าใช้จ่าย','ค่าน้ำมัน อาหาร เบี้ยเลี้ยง ซ่อมบำรุง และอื่นๆ',`<button class="btn pri" data-act="addExp">${ic('plus')}บันทึกค่าใช้จ่าย</button>`)+
-  `<div class="bar-f">${T?'':monthSel('eM',true)}<select class="sel" data-f="eV" aria-label="เรือ">${opt('all','ทุกลำและส่วนกลาง',U.eV)}${opt('common','ส่วนกลาง',U.eV)}${S.vessels.map(v=>opt(v.id,v.name,U.eV)).join('')}</select>
-  <select class="sel" data-f="eC" aria-label="หมวด">${opt('','ทุกหมวด',U.eC)}${Object.entries(CAT).map(([k,l])=>opt(k,l,U.eC)).join('')}</select>${tripSel('eT',U.eV)}</div>
-  <div class="g stats">${stat('ค่าใช้จ่ายรวม',baht(tot),prev?`เดือนก่อน ${baht(prev)}`:'','hot')}${stat('จำนวนรายการ',rows.length+' รายการ')}${stat('หมวดที่ใช้มากที่สุด',byCat[0]?esc(byCat[0].l):'-',byCat[0]?baht(byCat[0].v):'')}</div>
+  `<div class="bar-f"><select class="sel" data-f="eV" aria-label="เรือ">${opt('all','ทุกลำและส่วนกลาง',U.eV)}${opt('common','ส่วนกลาง',U.eV)}${S.vessels.map(v=>opt(v.id,v.name,U.eV)).join('')}</select>
+  <select class="sel" data-f="eC" aria-label="หมวด">${opt('','ทุกหมวด',U.eC)}${Object.entries(CAT).map(([k,l])=>opt(k,l,U.eC)).join('')}</select>${periodSel('eP',U.eV)}</div><p class="muted" style="margin:-6px 0 14px;font-size:13.5px">${periodText('eP',U.eV==='all'?'':U.eV)}</p>
+  <div class="g stats">${stat('ค่าใช้จ่ายรวม',baht(tot),'','hot')}${stat('จำนวนรายการ',rows.length+' รายการ')}${stat('หมวดที่ใช้มากที่สุด',byCat[0]?esc(byCat[0].l):'-',byCat[0]?baht(byCat[0].v):'')}</div>
   <div class="two">
     <div class="card flush">${rows.length?tbl([['วันที่'],['หมวด'],['รายละเอียด'],['เรือ'],['จำนวนเงิน','num']],rows.map(x=>`<tr class="click" data-act="editExp" data-id="${x.id}"><td class="nw">${dmy(x.date)}</td><td class="nw">${CAT[x.cat]}</td><td>${esc(x.note||'-')}</td><td class="nw">${esc(vName(x.vesselId))}<span class="sub">${tripTag(x)}</span></td><td class="num"><b>${baht(x.amount)}</b></td></tr>`),`<tr><td colspan="4">รวม</td><td class="num">${baht(tot)}</td></tr>`):empty('ไม่มีค่าใช้จ่ายในช่วงนี้')}</div>
     <div class="card"><h2>สรุปตามหมวด</h2>${byCat.length?hbars(byCat):empty('ไม่มีข้อมูล')}</div>
@@ -774,18 +788,18 @@ function pVessels(){
   `<div class="vgrid">${S.vessels.map(v=>{const cap=captainOf(v.id);const crew=S.crew.filter(c=>c.vesselId===v.id&&statusOf(c,CUR).s==='working').length;const att=allDocs().filter(d=>d.vesselId===v.id&&attention(d)).length;const st=VST[v.status];
     return `<a class="vcard" href="#/vessels/${v.id}"><div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><div class="nm">${esc(v.name)}${v.main?'<span class="tag">เรือหลัก</span>':''}</div><div class="rg">${esc(v.reg)}</div></div>${badge(st[0],st[1])}</div>
     ${(()=>{const t=openTripOf(v.id);return t?`<div class="row" style="margin-top:8px"><span>รอบที่ ${tripNo(t)}</span><b style="color:var(--brand)">ออกเรือวันที่ ${tripDays(t)}</b></div>`:''})()}<div class="row" style="margin-top:8px"><span>ไต้ก๋ง</span><b>${esc(cap?.name||'-')}</b></div><div class="row"><span>ลูกเรือทำงาน</span><b>${crew} คน</b></div><div class="row"><span>เอกสารต้องดูแล</span><b style="${att?'color:var(--brand)':''}">${att} รายการ</b></div></a>`}).join('')}</div>
-  <div class="card flush mt"><h2>สรุปเดือน${mLabel(CUR)}</h2><div class="mt">${tbl([['เรือ'],['สถานะ'],['ยอดขาย','num'],['น้ำหนัก','num'],['ค่าใช้จ่าย','num']],S.vessels.map(v=>{const s=S.sales.filter(x=>x.vesselId===v.id&&mOf(x.date)===CUR);return `<tr class="click" data-href="#/vessels/${v.id}"><td><b>${esc(v.name)}</b></td><td>${badge(VST[v.status][0],VST[v.status][1])}</td><td class="num">${baht(sum(s,x=>x.amount))}</td><td class="num">${kg(sum(s,x=>x.kg))}</td><td class="num">${baht(sum(S.exp.filter(x=>x.vesselId===v.id&&mOf(x.date)===CUR),x=>x.amount))}</td></tr>`}))}</div></div>`;
+  <div class="card flush mt"><h2>สรุปรอบปัจจุบัน</h2><div class="mt">${tbl([['เรือ'],['รอบปัจจุบัน'],['สถานะ'],['ยอดขาย','num'],['น้ำหนัก','num'],['ค่าใช้จ่าย','num']],S.vessels.map(v=>{const s=S.sales.filter(x=>x.vesselId===v.id&&inCur(x));return `<tr class="click" data-href="#/vessels/${v.id}"><td><b>${esc(v.name)}</b></td><td class="nw muted">${(()=>{const t=latestTrip(v.id);return t?'รอบที่ '+tripNo(t)+' · '+tripRange(t):'-'})()}</td><td>${badge(VST[v.status][0],VST[v.status][1])}</td><td class="num">${baht(sum(s,x=>x.amount))}</td><td class="num">${kg(sum(s,x=>x.kg))}</td><td class="num">${baht(sum(S.exp.filter(x=>x.vesselId===v.id&&inCur(x)),x=>x.amount))}</td></tr>`}))}</div></div>`;
 }
 
 function pVessel(id){
   const v=V(id);if(!v) return empty('ไม่พบเรือลำนี้')+'<p><a class="btn" href="#/vessels">กลับ</a></p>';
   const crew=S.crew.filter(c=>c.vesselId===id).map(c=>({c,st:statusOf(c,CUR)})).filter(x=>x.st.s&&x.st.s!=='resigned');
   const docs=allDocs().filter(d=>d.vesselId===id);const vd=docs.filter(d=>d.kind==='vessel');const sd=docs.filter(d=>d.kind==='crew'&&attention(d));
-  const sales=S.sales.filter(x=>x.vesselId===id&&mOf(x.date)===CUR),exp=S.exp.filter(x=>x.vesselId===id).sort((a,b)=>a.date<b.date?1:-1);
-  const expM=sum(exp.filter(x=>mOf(x.date)===CUR),x=>x.amount);
+  const sales=S.sales.filter(x=>x.vesselId===id&&inCur(x)),exp=S.exp.filter(x=>x.vesselId===id).sort((a,b)=>a.date<b.date?1:-1);
+  const expM=sum(exp.filter(inCur),x=>x.amount);
   return `<a class="back" href="#/vessels">${ic('back')}เรือทั้งหมด</a>
   ${ph(esc(v.name)+(v.main?'<span class="tag">เรือหลัก</span>':''),`ทะเบียน ${esc(v.reg)} · ไต้ก๋ง ${esc(captainOf(id)?.name||'-')}${v.note?' · '+esc(v.note):''}`,`${openTripOf(id)?`<button class="btn dark" data-act="closeTrip" data-id="${openTripOf(id).id}">${ic('anchor')}ปิดรอบ (เข้าฝั่ง)</button>`:`<button class="btn pri" data-act="openTrip" data-v="${id}">${ic('plus')}เปิดรอบใหม่</button>`}<select class="sel" data-vstatus="${id}" aria-label="สถานะเรือ">${Object.entries(VST).map(([k,[l]])=>opt(k,l,v.status)).join('')}</select><button class="btn" data-act="editVessel" data-id="${id}">${ic('edit')}แก้ไข</button>`)}
-  <div class="g stats">${stat('ลูกเรือ',crew.filter(x=>x.st.s==='working').length+' คน',`พัก ${crew.filter(x=>x.st.s==='resting').length} คน`)}${stat('ยอดขายเดือนนี้',baht(sum(sales,x=>x.amount)),kg(sum(sales,x=>x.kg)))}${stat('ค่าใช้จ่ายเดือนนี้',baht(expM))}${stat('เอกสารต้องดูแล',docs.filter(attention).length+' รายการ','',docs.filter(attention).length?'hot':'')}</div>
+  <div class="g stats">${stat('ลูกเรือ',crew.filter(x=>x.st.s==='working').length+' คน',`พัก ${crew.filter(x=>x.st.s==='resting').length} คน`)}${stat('ยอดขายรอบปัจจุบัน',baht(sum(sales,x=>x.amount)),kg(sum(sales,x=>x.kg)))}${stat('ค่าใช้จ่ายรอบปัจจุบัน',baht(expM))}${stat('เอกสารต้องดูแล',docs.filter(attention).length+' รายการ','',docs.filter(attention).length?'hot':'')}</div>
   <div class="halves">
     <div class="card flush"><h2>ลูกเรือ</h2><div class="mt">${crew.length?tbl([['ชื่อ'],['ตำแหน่ง'],['สถานะ']],crew.map(({c,st})=>`<tr class="click" data-href="#/crew/${c.id}"><td><b>${esc(c.name)}</b></td><td>${POS[c.position]}</td><td>${badge(CST[st.s][0],CST[st.s][1])}</td></tr>`)):empty('ยังไม่มีลูกเรือ')}</div></div>
     <div>
@@ -895,7 +909,7 @@ function reportData(){
     ts.forEach(t=>{const pr=tripPayRows(t);out.push({t:`${tripName(t)} · ${tripRange(t)}`,h:['ลูกเรือ','ธนาคาร','เงินเดือน','เงินเบิก','สุทธิ','สถานะ'],n:[2,3,4],rows:pr.map(r=>[r.c.name,r.c.bank.bank,baht(r.pay),baht(r.adv),baht(r.net),!t.end?'รอปิดรอบ':r.paid?'จ่ายแล้ว':'ยังไม่จ่าย']),foot:['รวม','',baht(sum(pr,r=>r.pay)),baht(sum(pr,r=>r.adv)),baht(sum(pr,r=>r.net)),'']})});
     if(!ts.length) out.push({t:'เงินเดือนตามรอบเรือ',h:['ลูกเรือ'],n:[],rows:[]});
   }
-  if(T==='adv'){const rk=rankAdv(m,vid);
+  if(T==='adv'){const rk=rankAdv(a=>inM(a.date,m),vid);
     out.push({t:'ยอดเบิกรายคน',h:['อันดับ','ลูกเรือ','เรือ','จำนวนครั้ง','ยอดเบิกรวม'],n:[3,4],rows:rk.map((r,i)=>[i+1,C(r.id)?.name||'-',vName(C(r.id)?.vesselId),r.n,baht(r.total)]),foot:['รวม','','',sum(rk,r=>r.n),baht(sum(rk,r=>r.total))]});
     out.push({t:'รายการเบิก',h:['วันที่','ลูกเรือ','รายละเอียด','จำนวนเงิน'],n:[3],rows:S.adv.filter(a=>inM(a.date,m)&&vOk(a)).sort((a,b)=>a.date<b.date?-1:1).map(a=>[dmy(a.date),C(a.crewId)?.name||'-',a.note||'',baht(a.amount)])});
   }
@@ -1164,7 +1178,7 @@ document.addEventListener('click',e=>{
 });
 document.addEventListener('change',e=>{const t=e.target;
   if(t.closest('#modal')) return;
-  if(t.dataset.f!==undefined){U[t.dataset.f]=t.value;const tk={sV:'sT',aV:'aT',eV:'eT'}[t.dataset.f];if(tk)U[tk]='';render()}
+  if(t.dataset.f!==undefined){U[t.dataset.f]=t.value;const pk=PKEYS[t.dataset.f];if(pk&&String(U[pk]).startsWith('t:')){const tr=S.trips.find(y=>y.id===U[pk].slice(2));if(!tr||(t.value&&t.value!=='all'&&tr.vesselId!==t.value))U[pk]='cur'}render()}
   else if(t.dataset.crewStatus){const id=t.dataset.crewStatus;(S.status[id]=S.status[id]||{})[U.cM]=t.value;if(t.value==='resigned')C(id).events.push({date:TODAY,text:'ลาออก'});save();render();toast('บันทึกสถานะแล้ว')}
   else if(t.dataset.vstatus){V(t.dataset.vstatus).status=t.value;save();render();toast('เปลี่ยนสถานะเรือแล้ว')}
 });
