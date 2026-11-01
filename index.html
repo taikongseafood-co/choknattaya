@@ -220,6 +220,15 @@ td.nw{white-space:nowrap}
 .ck{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px;cursor:pointer}.ck input{width:17px;height:17px;accent-color:var(--brand)}
 @media (max-width:520px){.checks{grid-template-columns:1fr}}
 .lnk{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--brand);text-decoration:none;font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}.lnk:hover{text-decoration:underline}.lnk svg.i{width:14px;height:14px}
+.dchips{display:flex;flex-wrap:wrap;gap:6px}
+.dchip{border:1px solid var(--line);background:var(--surface2);border-radius:8px;padding:3px 8px;font-size:13px;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums}
+.dchip:hover{border-color:var(--brand)}.dchip b{font-weight:600}
+details.rd{border:1px solid var(--line);border-radius:12px;margin-bottom:10px;overflow:hidden}
+details.rd summary{cursor:pointer;padding:12px 14px;display:flex;flex-wrap:wrap;gap:6px 10px;align-items:center;list-style:none;background:var(--surface2)}
+details.rd summary::-webkit-details-marker{display:none}
+details.rd summary::before{content:"▸";color:var(--muted);transition:transform .15s}
+details.rd[open] summary::before{transform:rotate(90deg)}
+details.rd .rs{margin-left:auto;font-size:13.5px;color:var(--muted)}details.rd .rs b{color:var(--text);font-size:15px}
 .note{background:var(--brand-soft);color:var(--text);border-radius:12px;padding:11px 14px;font-size:13.5px;margin-bottom:14px;display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap}
 .muted{color:var(--muted)}
 .mt{margin-top:14px}
@@ -565,15 +574,15 @@ const inTrip=(x,t)=>x.vesselId===t.vesselId&&tripFor(x.vesselId,x.date)===t;
 const tripTag=x=>{const t=x.vesselId&&tripFor(x.vesselId,x.date);return t?`รอบที่ ${tripNo(t)}`:''};
 function tripPayRows(t){
   const tp=S.tripPay[t.id]||{}, advs=S.adv.filter(a=>inTrip(a,t)), d=tripDays(t), m=mOf(t.end||TODAY);
-  const ids=[...new Set([...(t.crew||[]),...advs.map(a=>a.crewId)])];
+  const ids=[...new Set(t.crew||[])];
   return ids.map(id=>{const c=C(id);if(!c)return null;const on=(t.crew||[]).includes(id),rate=salaryOf(c,m),auto=on?rate:0,o=tp[id]||{};
     const custom=o.amount!==undefined&&o.amount!=='';const pay=custom?+o.amount:auto;const adv=sum(advs.filter(a=>a.crewId===id),a=>a.amount);
-    return {c,on,rate,days:on?d:0,auto,pay,custom,adv,net:pay-adv,paid:!!o.paid}}).filter(Boolean)
+    return {c,on,rate,days:on?d:0,auto,pay,custom,adv,net:pay,paid:!!o.paid}}).filter(Boolean)
    .sort((a,b)=>(b.on-a.on)||({captain:0,engineer:1,helm:2,cook:3,crew:4}[a.c.position]-{captain:0,engineer:1,helm:2,cook:3,crew:4}[b.c.position])||a.c.name.localeCompare(b.c.name,'th'));
 }
 function tripSum(t){const sales=S.sales.filter(x=>inTrip(x,t)),exp=S.exp.filter(x=>inTrip(x,t)),pr=tripPayRows(t),adv=S.adv.filter(x=>inTrip(x,t));
   const amt=sum(sales,x=>x.amount),expT=sum(exp,x=>x.amount),pay=sum(pr,r=>r.pay);
-  return {sales,exp,pr,adv,amt,kg:sum(sales,x=>x.kg),expT,pay,advT:sum(pr,r=>r.adv),net:sum(pr,r=>r.net),paidN:pr.filter(r=>r.paid).length,profit:amt-expT-pay,unpaid:sum(pr.filter(r=>!r.paid),r=>r.net)}}
+  return {sales,exp,pr,adv,amt,kg:sum(sales,x=>x.kg),expT,pay,advT:sum(adv,a=>a.amount),net:sum(pr,r=>r.net),paidN:pr.filter(r=>r.paid).length,profit:amt-expT-pay,unpaid:sum(pr.filter(r=>!r.paid),r=>r.net)}}
 function tripState(t,ts){if(!t.end)return ['กำลังออกเรือ','brand'];ts=ts||tripSum(t);return ts.pr.length&&ts.paidN===ts.pr.length?['จ่ายครบแล้ว','ok']:['รอจ่ายเงินเดือน','warn']}
 const tripSel=(key,vid)=>`<select class="sel" data-f="${key}" aria-label="รอบเรือ">${opt('','ทุกรอบ',U[key])}${[...S.trips].filter(t=>!vid||vid==='all'||t.vesselId===vid).sort((a,b)=>a.start<b.start?1:-1).map(t=>opt(t.id,`${tripName(t)} (${dmy(t.start).slice(0,5)}${t.end?'–'+dmy(t.end).slice(0,5):' →'})`,U[key])).join('')}</select>`;
 const curTrip=k=>U[k]&&S.trips.find(t=>t.id===U[k]);
@@ -595,7 +604,7 @@ const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${Str
 function dateList(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'T00:00:00');while(d<=e&&out.length<500){out.push(iso(d));d.setDate(d.getDate()+1)}return out}
 
 /* ---------- ui state ---------- */
-const U={sP:'cur',aP:'cur',eP:'cur',iQ:'',iC:'',iS:'',iTab:'items',dK:'',sT:'',aT:'',eT:'',tV:'',sM:CUR,sV:'',cM:CUR,cV:'',cS:'',cQ:'',pM:CUR,pV:'',aM:CUR,aV:'',eM:CUR,eV:'all',eC:'',dT:'crew',dS:'',rT:'sales',rM:CUR,rV:'',tab:'info',reveal:{}};
+const U={aView:'list',sP:'cur',aP:'cur',eP:'cur',iQ:'',iC:'',iS:'',iTab:'items',dK:'',sT:'',aT:'',eT:'',tV:'',sM:CUR,sV:'',cM:CUR,cV:'',cS:'',cQ:'',pM:CUR,pV:'',aM:CUR,aV:'',eM:CUR,eV:'all',eC:'',dT:'crew',dS:'',rT:'sales',rM:CUR,rV:'',tab:'info',reveal:{}};
 const opt=(v,l,cur)=>`<option value="${esc(v)}"${String(v)===String(cur)?' selected':''}>${esc(l)}</option>`;
 const monthSel=(key,withAll)=>`<select class="sel" data-f="${key}" aria-label="เดือน">${withAll?opt('all','ทุกเดือน',U[key]):''}${months().map(m=>opt(m,mLabel(m),U[key])).join('')}</select>`;
 const vesselSel=(key,extra)=>`<select class="sel" data-f="${key}" aria-label="เรือ">${opt('','ทุกลำ',U[key])}${extra||''}${S.vessels.map(v=>opt(v.id,v.name,U[key])).join('')}</select>`;
@@ -707,11 +716,13 @@ function pCrewProfile(id){
     const pays=[...S.trips].sort((a,b)=>a.start<b.start?1:-1).map(t=>({t,r:tripPayRows(t).find(r=>r.c.id===id)})).filter(x=>x.r);const owe=pays.filter(x=>x.t.end&&!x.r.paid);
     body=`<div class="g stats">${stat('เงินเดือนปัจจุบัน',baht(salaryOf(c,CUR)))}${stat('เบิกรอบนี้',baht(monthAdv))}${stat('ยังไม่ได้รับ',baht(sum(owe,x=>x.r.net)),owe.length+' รอบที่จบแล้ว',owe.length?'hot':'')}</div>
     <div class="halves"><div class="card flush"><h2>ประวัติเงินเดือน<button class="btn sm" data-act="editSalary" data-id="${id}">${ic('edit')}ปรับเงินเดือน</button></h2><div class="mt">${tbl([['มีผลตั้งแต่'],['เงินเดือน','num']],h.map(x=>`<tr><td>${mLabel(x.from)}${x.note?`<span class="sub">${esc(x.note)}</span>`:''}</td><td class="num"><b>${baht(x.amount)}</b></td></tr>`))}</div></div>
-    <div class="card flush"><h2>เงินเดือนตามรอบเรือ</h2><div class="mt">${pays.length?tbl([['รอบเรือ'],['เงินเดือน','num'],['เงินเบิก','num'],['สุทธิ','num'],['สถานะ']],pays.map(({t,r})=>`<tr class="click" data-href="#/trips/${t.id}"><td class="nw">${esc(tripName(t))}<span class="sub">${tripRange(t)}</span></td><td class="num">${baht(r.pay)}</td><td class="num">${baht(r.adv)}</td><td class="num"><b class="${r.net<0?'neg':''}">${baht(r.net)}</b></td><td>${!t.end?badge('กำลังออกเรือ','brand'):r.paid?badge('จ่ายแล้ว','ok'):badge('ยังไม่จ่าย','warn')}</td></tr>`)):empty('ยังไม่มีข้อมูล')}</div></div></div>`}
-  if(U.tab==='adv'){const tot=sum(allAdv,a=>a.amount);const byM={};allAdv.forEach(a=>byM[mOf(a.date)]=(byM[mOf(a.date)]||0)+a.amount);
-    const mm=Object.keys(byM).sort().reverse();
+    <div class="card flush"><h2>เงินเดือนตามรอบเรือ</h2><div class="mt">${pays.length?tbl([['รอบเรือ'],['เงินเดือน','num'],['เบิกรอบนี้ (ไม่หัก)','num'],['สถานะ']],pays.map(({t,r})=>`<tr class="click" data-href="#/trips/${t.id}"><td class="nw">${esc(tripName(t))}<span class="sub">${tripRange(t)}</span></td><td class="num"><b>${baht(r.pay)}</b></td><td class="num muted">${r.adv?baht(r.adv):'-'}</td><td>${!t.end?badge('กำลังออกเรือ','brand'):r.paid?badge('จ่ายแล้ว','ok'):badge('ยังไม่จ่าย','warn')}</td></tr>`)):empty('ยังไม่มีข้อมูล')}</div></div></div>`}
+  if(U.tab==='adv'){const tot=sum(allAdv,a=>a.amount);const byR={};allAdv.forEach(a=>(byR[advTripKey(a)]=byR[advTripKey(a)]||[]).push(a));
+    const rk=Object.keys(byR).map(k=>{const t=S.trips.find(x=>x.id===k);const l=byR[k].sort((x,y)=>x.date<y.date?-1:1);
+      return {k,t,label:t?tripName(t):k==='none'?'ไม่ระบุเรือ':vName(k.slice(5))+' · รอรอบถัดไป',range:t?tripRange(t):'ยังไม่เปิดรอบ',l,tot:sum(l,a=>a.amount),d:l[0].date}}).sort((a,b)=>a.d<b.d?1:-1);
     body=`<div class="g stats">${stat('ยอดเบิกทั้งหมด',baht(tot),'','hot')}${stat('จำนวนครั้ง',allAdv.length+' ครั้ง')}${stat('เฉลี่ยต่อครั้ง',baht(allAdv.length?tot/allAdv.length:0))}${stat('เบิกรอบนี้',baht(monthAdv))}</div>
-    <div class="halves"><div class="card"><h2>ยอดเบิกรายเดือน</h2>${mm.length?hbars(mm.map(m=>({l:mLabel(m),v:byM[m]}))):empty('ยังไม่เคยเบิกเงิน')}</div>
+    <div class="card flush" style="margin-bottom:14px"><h2>ยอดเบิกแต่ละรอบเรือ</h2><div class="mt">${rk.length?tbl([['รอบเรือ'],['วันที่เบิก (กดเพื่อแก้ไข)'],['รวม','num']],rk.map(r=>`<tr><td class="nw"><b>${esc(r.label)}</b><span class="sub">${r.range}</span></td><td><div class="dchips">${r.l.map(advChip).join('')}</div></td><td class="num"><b>${baht(r.tot)}</b><span class="sub">${r.l.length} ครั้ง</span></td></tr>`),`<tr><td colspan="2">รวมทุกรอบ</td><td class="num">${baht(tot)}</td></tr>`):empty('ยังไม่เคยเบิกเงิน')}</div></div>
+    <div>
     <div class="card flush"><h2>ประวัติการเบิก<button class="btn sm pri" data-act="addAdv" data-crew="${id}">${ic('plus')}บันทึกการเบิก</button></h2><div class="mt">${allAdv.length?tbl([['วันที่'],['รายละเอียด'],['จำนวนเงิน','num']],allAdv.map(a=>`<tr class="click" data-act="editAdv" data-id="${a.id}"><td class="nw">${dmy(a.date)}</td><td>${esc(a.note||'-')}</td><td class="num"><b>${baht(a.amount)}</b></td></tr>`),`<tr><td colspan="2">รวม</td><td class="num">${baht(tot)}</td></tr>`):empty('ยังไม่เคยเบิกเงิน')}</div></div></div>`}
   if(U.tab==='history'){const ms=[...new Set([...months(),'2026-06','2026-07'])].sort().reverse().slice(0,6);
     body=`<div class="halves"><div class="card flush"><h2>สถานะรายเดือน</h2><div class="mt">${tbl([['เดือน'],['สถานะ']],ms.map(m=>{const s=statusOf(c,m);return `<tr><td>${mLabel(m)}</td><td>${s.s?badge(CST[s.s][0],CST[s.s][1]):'<span class="muted">ยังไม่เริ่มงาน</span>'}</td></tr>`}))}</div></div>
@@ -729,20 +740,53 @@ function pPayroll(){
   const rank={'รอจ่ายเงินเดือน':0,'กำลังออกเรือ':1,'จ่ายครบแล้ว':2};
   list.sort((a,b)=>rank[a.st[0]]-rank[b.st[0]]||(a.t.start<b.t.start?1:-1));
   const due=list.filter(x=>x.st[0]==='รอจ่ายเงินเดือน'), open=list.filter(x=>!x.t.end);
-  return ph('เงินเดือน','จ่ายตอนจบรอบเรือ ตามเงินเดือนของแต่ละคน หักเงินเบิกของรอบนั้นให้อัตโนมัติ','')+
+  return ph('เงินเดือน','จ่ายตอนจบรอบเรือ ตามเงินเดือนเต็มของแต่ละคน ระบบไม่หักเงินเบิกอัตโนมัติ (ดูยอดเบิกได้ที่หน้าเงินเบิก แท็บสรุปตามรอบเรือ)','')+
   `<div class="bar-f">${vesselSel('pV')}</div>
   <div class="g stats">${stat('รอจ่าย',baht(sum(due,x=>x.ts.unpaid)),due.length+' รอบที่เข้าฝั่งแล้ว',due.length?'hot':'')}${stat('รอบที่กำลังออก',baht(sum(open,x=>x.ts.net)),open.length+' รอบ · จ่ายหลังปิดรอบ')}${stat('จ่ายแล้วทั้งหมด',baht(sum(list,x=>sum(x.ts.pr.filter(r=>r.paid),r=>r.net))))}</div>
-  <div class="card flush">${list.length?tbl([['รอบเรือ'],['ช่วงวันที่'],['วัน','num'],['ลูกเรือ','num'],['เงินเดือนรวม','num'],['หักเบิก','num'],['สุทธิ','num'],['สถานะ']],
-    list.map(({t,ts,st})=>`<tr class="click" data-href="#/trips/${t.id}"><td><b>${esc(tripName(t))}</b></td><td class="nw">${tripRange(t)}</td><td class="num">${tripDays(t)}</td><td class="num">${ts.pr.filter(r=>r.on).length}</td><td class="num">${baht(ts.pay)}</td><td class="num">${baht(ts.advT)}</td><td class="num"><b>${baht(ts.net)}</b></td><td>${badge(st[0]+(t.end&&st[0]!=='จ่ายครบแล้ว'?` ${ts.paidN}/${ts.pr.length}`:''),st[1])}</td></tr>`))
+  <div class="card flush">${list.length?tbl([['รอบเรือ'],['ช่วงวันที่'],['วัน','num'],['ลูกเรือ','num'],['เงินเดือนรวม','num'],['เบิกรอบนี้ (ไม่หัก)','num'],['สถานะ']],
+    list.map(({t,ts,st})=>`<tr class="click" data-href="#/trips/${t.id}"><td><b>${esc(tripName(t))}</b></td><td class="nw">${tripRange(t)}</td><td class="num">${tripDays(t)}</td><td class="num">${ts.pr.filter(r=>r.on).length}</td><td class="num"><b>${baht(ts.pay)}</b></td><td class="num muted">${baht(sum(ts.adv,a=>a.amount))}</td><td>${badge(st[0]+(t.end&&st[0]!=='จ่ายครบแล้ว'?` ${ts.paidN}/${ts.pr.length}`:''),st[1])}</td></tr>`))
     :empty('ยังไม่มีรอบเรือ','เปิดรอบแรกได้ที่หน้า “รอบเรือ”')}</div>`;
 }
 
+function advTripKey(a){if(!a.vesselId)return 'none';const t=tripFor(a.vesselId,a.date);return t?t.id:'next:'+a.vesselId}
+function advRounds(vid){
+  const trips=tripsOf(vid), advs=S.adv.filter(a=>a.vesselId===vid);
+  const cols=trips.map(t=>({key:t.id,t,label:'รอบที่ '+tripNo(t),sub:`${dmy(t.start).slice(0,5)}–${t.end?dmy(t.end).slice(0,5):'ยังไม่เข้าฝั่ง'}`,rows:advs.filter(a=>inTrip(a,t))}));
+  const nx=advs.filter(a=>!tripFor(vid,a.date));
+  if(nx.length)cols.push({key:'next:'+vid,t:null,label:'รอรอบถัดไป',sub:'ยังไม่เปิดรอบ',rows:nx});
+  return cols;
+}
+function advCrewDates(rows){const by={};rows.forEach(a=>(by[a.crewId]=by[a.crewId]||[]).push(a));
+  return Object.entries(by).map(([cid,l])=>({c:C(cid),cid,list:l.sort((x,y)=>x.date<y.date?-1:1),total:sum(l,a=>a.amount)})).sort((x,y)=>y.total-x.total)}
+const advChip=a=>`<button class="dchip" data-act="editAdv" data-id="${a.id}" title="${esc(a.note||'')}">${dmy(a.date).slice(0,5)} <b>${baht(a.amount)}</b></button>`;
+function pAdvRounds(){
+  const vs=S.vessels.filter(v=>(!U.aV||v.id===U.aV)&&S.adv.some(a=>a.vesselId===v.id));
+  const common=!U.aV?S.adv.filter(a=>!a.vesselId):[];
+  if(!vs.length&&!common.length) return empty('ยังไม่มีการเบิกเงิน');
+  return vs.map(v=>{
+    const cols=advRounds(v.id).filter(c=>c.rows.length||(c.t&&!c.t.end));
+    const ids=[...new Set(cols.flatMap(c=>c.rows.map(a=>a.crewId)))];
+    const cell=(cid,c)=>sum(c.rows.filter(a=>a.crewId===cid),a=>a.amount);
+    const people=ids.map(cid=>({cid,c:C(cid),tot:sum(cols,col=>cell(cid,col))})).sort((a,b)=>b.tot-a.tot);
+    const head=[['ลูกเรือ'],...cols.map(c=>[`${c.label}<span class="sub" style="font-weight:400">${c.sub}</span>`,'num']),['รวมทุกรอบ','num']];
+    const matrix=people.length?tbl(head,people.map(p=>`<tr class="click" data-href="#/crew/${p.cid}"><td class="nw"><b>${esc(p.c?.name||'-')}</b></td>${cols.map(c=>{const x=cell(p.cid,c);return `<td class="num">${x?baht(x):'<span class="muted">-</span>'}</td>`}).join('')}<td class="num"><b>${baht(p.tot)}</b></td></tr>`),
+      `<tr><td>รวม ${people.length} คน</td>${cols.map(c=>`<td class="num">${baht(sum(c.rows,a=>a.amount))}</td>`).join('')}<td class="num">${baht(sum(people,p=>p.tot))}</td></tr>`):empty('ยังไม่มีการเบิกเงิน');
+    const det=[...cols].reverse().map((c,i)=>{const g=advCrewDates(c.rows);
+      return `<details class="rd"${i===0?' open':''}><summary><b>${c.label}</b> <span class="muted">${c.t?tripRange(c.t):c.sub}</span><span class="rs">${g.length} คน · ${c.rows.length} ครั้ง · <b>${baht(sum(c.rows,a=>a.amount))}</b></span></summary>
+      ${g.length?tbl([['ลูกเรือ'],['วันที่เบิก (กดเพื่อแก้ไข)'],['รวม','num']],g.map(x=>`<tr><td class="nw"><a href="#/crew/${x.cid}" style="text-decoration:none"><b>${esc(x.c?.name||'-')}</b></a><span class="sub">${x.list.length} ครั้ง</span></td><td><div class="dchips">${x.list.map(advChip).join('')}</div></td><td class="num"><b>${baht(x.total)}</b></td></tr>`)):'<div class="empty">ไม่มีการเบิกในรอบนี้</div>'}</details>`}).join('');
+    return `<div class="card flush" style="margin-bottom:14px"><h2>${esc(v.name)} · เบิกแต่ละรอบ</h2><div class="mt">${matrix}</div></div>
+    <div class="card" style="margin-bottom:22px"><h2>${esc(v.name)} · รายละเอียดแต่ละรอบ</h2>${det}</div>`}).join('')+
+  (common.length?`<div class="card"><h2>ไม่ระบุเรือ</h2>${tbl([['ลูกเรือ'],['วันที่เบิก'],['รวม','num']],advCrewDates(common).map(x=>`<tr><td><b>${esc(x.c?.name||'-')}</b></td><td><div class="dchips">${x.list.map(advChip).join('')}</div></td><td class="num"><b>${baht(x.total)}</b></td></tr>`))}</div>`:'');
+}
 function pAdvances(){
+  const vt=`<div class="tabs">${[['list','รายการเบิก'],['rounds','สรุปตามรอบเรือ']].map(([k,l])=>`<button class="${U.aView===k?'on':''}" data-act="setF" data-k="aView" data-v="${k}">${l}</button>`).join('')}</div>`;
+  if(U.aView==='rounds') return ph('เงินเบิกล่วงหน้า','ยอดเบิกของลูกเรือแต่ละคน แยกตามรอบเรือ',`<button class="btn pri" data-act="addAdv">${ic('plus')}บันทึกการเบิก</button>`)+vt+
+    `<div class="bar-f">${vesselSel('aV')}</div>`+pAdvRounds();
   const rows=S.adv.filter(a=>inPeriod('aP',a)&&(!U.aV||a.vesselId===U.aV)).sort((a,b)=>a.date<b.date?1:-1);
   const rank=rankAdv(a=>inPeriod('aP',a),U.aV),tot=sum(rows,a=>a.amount);
   const lab=U.aP==='cur'?'ยอดเบิกรวมรอบนี้':U.aP.startsWith('m:')?'ยอดเบิกรวมเดือนนี้':U.aP==='all'?'ยอดเบิกรวม':'ยอดเบิกรวมรอบนี้';
-  const dTag=a=>{const t=tripFor(a.vesselId,a.date);return t?(t.end?`หักรอบที่ ${tripNo(t)}`:`จะหักตอนจบรอบที่ ${tripNo(t)}`):'หักรอบถัดไป'};
-  return ph('เงินเบิกล่วงหน้า','ลูกเรือแต่ละคนเบิกไปเท่าไร หักจากเงินเดือนตอนจบรอบเรือโดยอัตโนมัติ',`<button class="btn pri" data-act="addAdv">${ic('plus')}บันทึกการเบิก</button>`)+
+  const dTag=a=>{const t=tripFor(a.vesselId,a.date);return t?`รอบที่ ${tripNo(t)}`:'รอรอบถัดไป'};
+  return ph('เงินเบิกล่วงหน้า','ลูกเรือแต่ละคนเบิกไปเท่าไร (ระบบไม่หักจากเงินเดือนอัตโนมัติ)',`<button class="btn pri" data-act="addAdv">${ic('plus')}บันทึกการเบิก</button>`)+vt+
   `<div class="bar-f">${vesselSel('aV')}${periodSel('aP',U.aV)}</div><p class="muted" style="margin:-6px 0 14px;font-size:13.5px">${periodText('aP',U.aV)}</p>
   <div class="g stats">${stat(lab,baht(tot),'','hot')}${stat('จำนวนรายการ',rows.length+' ครั้ง')}${stat('จำนวนคนที่เบิก',rank.length+' คน')}${stat('เฉลี่ยต่อคน',baht(rank.length?tot/rank.length:0))}</div>
   <div class="halves">
@@ -830,13 +874,13 @@ function pTrip(id){
   const acts=(t.end?(unpaid.length?`<button class="btn pri" data-act="payAll" data-trip="${id}">${ic('check')}จ่ายทั้งหมด (${unpaid.length} คน)</button>`:''):`<button class="btn dark" data-act="closeTrip" data-id="${id}">${ic('anchor')}ปิดรอบ (เข้าฝั่ง)</button>`)+`<button class="btn" data-act="tripCrew" data-id="${id}">${ic('users')}แก้รายชื่อลูกเรือ</button><button class="btn" data-act="editTrip" data-id="${id}">${ic('edit')}แก้ไขรอบ</button>`;
   return `<a class="back" href="#/trips">${ic('back')}รอบเรือทั้งหมด</a>
   ${ph(esc(tripName(t)),`${tripRange(t)} · ${tripDays(t)} วัน · ${badge(st[0],st[1])}${t.note?' · '+esc(t.note):''}`,acts)}
-  <div class="g stats">${stat('ยอดขาย',baht(ts.amt),kg(ts.kg))}${stat('ค่าใช้จ่าย',baht(ts.expT),ts.exp.length+' รายการ')}${stat('เงินเดือนลูกเรือ',baht(ts.pay),`หักเบิก ${baht(ts.advT)}`)}${stat('กำไรโดยประมาณ',baht(ts.profit),'ยอดขาย − ค่าใช้จ่าย − เงินเดือน',ts.profit>=0?'hot':'')}</div>
+  <div class="g stats">${stat('ยอดขาย',baht(ts.amt),kg(ts.kg))}${stat('ค่าใช้จ่าย',baht(ts.expT),ts.exp.length+' รายการ')}${stat('เงินเดือนลูกเรือ',baht(ts.pay),`เบิกรอบนี้ ${baht(sum(ts.adv,a=>a.amount))} (ไม่หัก)`)}${stat('กำไรโดยประมาณ',baht(ts.profit),'ยอดขาย − ค่าใช้จ่าย − เงินเดือน',ts.profit>=0?'hot':'')}</div>
   ${!t.end?`<div class="note"><span>รอบนี้ยังไม่เข้าฝั่ง กดจ่ายเงินเดือนได้หลังปิดรอบ</span></div>`:''}
-  <div class="card flush"><h2>เงินเดือนรอบนี้</h2><div class="mt">${ts.pr.length?tbl([['ลูกเรือ'],['เงินเดือน','num'],['เงินเบิก','num'],['สุทธิ','num'],['สถานะ']],
-    ts.pr.map(r=>`<tr><td><a href="#/crew/${r.c.id}" style="text-decoration:none"><b>${esc(r.c.name)}</b></a><span class="sub">${r.on?POS[r.c.position]+(r.c.vesselId!==t.vesselId?' · มาจาก '+esc(vName(r.c.vesselId)):''):'ไม่ได้ออกรอบนี้ มีแต่เงินเบิก'}</span></td><td class="num">${baht(r.pay)}</td>
-      <td class="num">${r.adv?baht(r.adv):'<span class="muted">-</span>'}</td><td class="num"><b class="${r.net<0?'neg':''}">${baht(r.net)}</b></td>
+  <div class="card flush"><h2>เงินเดือนรอบนี้<span class="muted" style="font-size:13px;font-weight:400">จ่ายเต็ม ไม่หักเงินเบิก</span></h2><div class="mt">${ts.pr.length?tbl([['ลูกเรือ'],['เงินเดือน','num'],['เบิกรอบนี้ (ดูประกอบ)','num'],['สถานะ']],
+    ts.pr.map(r=>`<tr><td><a href="#/crew/${r.c.id}" style="text-decoration:none"><b>${esc(r.c.name)}</b></a><span class="sub">${r.on?POS[r.c.position]+(r.c.vesselId!==t.vesselId?' · มาจาก '+esc(vName(r.c.vesselId)):''):'ไม่ได้ออกรอบนี้ มีแต่เงินเบิก'}</span></td><td class="num"><b>${baht(r.pay)}</b></td>
+      <td class="num muted">${r.adv?baht(r.adv):'-'}</td>
       <td>${t.end?`<button class="paybtn ${r.paid?'paid':''}" data-act="togglePaid" data-trip="${id}" data-id="${r.c.id}">${r.paid?'✓ จ่ายแล้ว':'ยังไม่จ่าย'}</button>`:'<span class="muted">รอปิดรอบ</span>'}</td></tr>`),
-    `<tr><td>รวม ${ts.pr.length} คน</td><td class="num">${baht(ts.pay)}</td><td class="num">${baht(ts.advT)}</td><td class="num">${baht(ts.net)}</td><td></td></tr>`):empty('ยังไม่มีลูกเรือในรอบนี้')}</div></div>
+    `<tr><td>รวม ${ts.pr.length} คน</td><td class="num">${baht(ts.pay)}</td><td class="num">${baht(ts.advT)}</td><td></td></tr>`):empty('ยังไม่มีลูกเรือในรอบนี้')}</div></div>
   <div class="halves mt">
     <div class="card flush"><h2>ยอดขายรอบนี้<button class="btn sm" data-act="addSale" data-v="${t.vesselId}">${ic('plus')}บันทึก</button></h2><div class="mt">${ts.sales.length?tbl([['วันที่'],['น้ำหนัก','num'],['ยอดขาย','num']],[...ts.sales].sort((a,b)=>a.date<b.date?1:-1).map(s=>`<tr class="click" data-act="editSale" data-id="${s.id}"><td class="nw">${dmy(s.date)}</td><td class="num">${kg(s.kg)}</td><td class="num"><b>${baht(s.amount)}</b></td></tr>`),`<tr><td>รวม</td><td class="num">${kg(ts.kg)}</td><td class="num">${baht(ts.amt)}</td></tr>`):empty('ยังไม่มียอดขาย')}</div></div>
     <div class="card flush"><h2>ค่าใช้จ่ายรอบนี้<button class="btn sm" data-act="addExp" data-v="${t.vesselId}">${ic('plus')}บันทึก</button></h2><div class="mt">${ts.exp.length?tbl([['วันที่'],['หมวด'],['จำนวนเงิน','num']],[...ts.exp].sort((a,b)=>a.date<b.date?1:-1).map(x=>`<tr class="click" data-act="editExp" data-id="${x.id}"><td class="nw">${dmy(x.date)}</td><td>${CAT[x.cat]}<span class="sub">${esc(x.note||'')}</span></td><td class="num"><b>${baht(x.amount)}</b></td></tr>`),`<tr><td colspan="2">รวม</td><td class="num">${baht(ts.expT)}</td></tr>`):empty('ยังไม่มีค่าใช้จ่าย')}</div></div>
@@ -906,10 +950,14 @@ function reportData(){
       foot:['รวม','','','',kg(sum(ts,y=>y.x.kg)),baht(sum(ts,y=>y.x.amt)),baht(sum(ts,y=>y.x.expT)),baht(sum(ts,y=>y.x.pay)),baht(sum(ts,y=>y.x.profit))]});
   }
   if(T==='payroll'){const ts=S.trips.filter(t=>vOk(t)&&(m==='all'||mOf(t.end||TODAY)===m)).sort((a,b)=>a.start<b.start?-1:1);
-    ts.forEach(t=>{const pr=tripPayRows(t);out.push({t:`${tripName(t)} · ${tripRange(t)}`,h:['ลูกเรือ','ธนาคาร','เงินเดือน','เงินเบิก','สุทธิ','สถานะ'],n:[2,3,4],rows:pr.map(r=>[r.c.name,r.c.bank.bank,baht(r.pay),baht(r.adv),baht(r.net),!t.end?'รอปิดรอบ':r.paid?'จ่ายแล้ว':'ยังไม่จ่าย']),foot:['รวม','',baht(sum(pr,r=>r.pay)),baht(sum(pr,r=>r.adv)),baht(sum(pr,r=>r.net)),'']})});
+    ts.forEach(t=>{const pr=tripPayRows(t);out.push({t:`${tripName(t)} · ${tripRange(t)}`,h:['ลูกเรือ','ธนาคาร','เงินเดือน','เบิกรอบนี้ (ไม่หัก)','สถานะ'],n:[2,3],rows:pr.map(r=>[r.c.name,r.c.bank.bank,baht(r.pay),baht(r.adv),!t.end?'รอปิดรอบ':r.paid?'จ่ายแล้ว':'ยังไม่จ่าย']),foot:['รวม','',baht(sum(pr,r=>r.pay)),baht(sum(pr,r=>r.adv)),'']})});
     if(!ts.length) out.push({t:'เงินเดือนตามรอบเรือ',h:['ลูกเรือ'],n:[],rows:[]});
   }
   if(T==='adv'){const rk=rankAdv(a=>inM(a.date,m),vid);
+    S.vessels.filter(v=>(!vid||v.id===vid)&&S.adv.some(a=>a.vesselId===v.id)).forEach(v=>{const cols=advRounds(v.id).filter(c=>c.rows.length);const ids=[...new Set(cols.flatMap(c=>c.rows.map(a=>a.crewId)))];
+      const cell=(cid,c)=>sum(c.rows.filter(a=>a.crewId===cid),a=>a.amount);const ppl=ids.map(cid=>({cid,tot:sum(cols,c=>cell(cid,c))})).sort((a,b)=>b.tot-a.tot);
+      out.push({t:`${v.name} · เบิกแต่ละรอบ (ทุกรอบ ไม่ขึ้นกับเดือน)`,h:['ลูกเรือ',...cols.map(c=>c.label+' ('+c.sub+')'),'รวมทุกรอบ'],n:cols.map((_,i)=>i+1).concat(cols.length+1),
+        rows:ppl.map(p=>[C(p.cid)?.name||'-',...cols.map(c=>{const x=cell(p.cid,c);return x?baht(x):'-'}),baht(p.tot)]),foot:['รวม',...cols.map(c=>baht(sum(c.rows,a=>a.amount))),baht(sum(ppl,p=>p.tot))]})});
     out.push({t:'ยอดเบิกรายคน',h:['อันดับ','ลูกเรือ','เรือ','จำนวนครั้ง','ยอดเบิกรวม'],n:[3,4],rows:rk.map((r,i)=>[i+1,C(r.id)?.name||'-',vName(C(r.id)?.vesselId),r.n,baht(r.total)]),foot:['รวม','','',sum(rk,r=>r.n),baht(sum(rk,r=>r.total))]});
     out.push({t:'รายการเบิก',h:['วันที่','ลูกเรือ','รายละเอียด','จำนวนเงิน'],n:[3],rows:S.adv.filter(a=>inM(a.date,m)&&vOk(a)).sort((a,b)=>a.date<b.date?-1:1).map(a=>[dmy(a.date),C(a.crewId)?.name||'-',a.note||'',baht(a.amount)])});
   }
@@ -1042,7 +1090,7 @@ const ACT={
   payAll:d=>{const t=S.trips.find(x=>x.id===d.trip);const tp=(S.tripPay[t.id]=S.tripPay[t.id]||{});const r=tripPayRows(t).filter(x=>!x.paid);r.forEach(x=>{(tp[x.c.id]=tp[x.c.id]||{}).paid=true});save();render();toast(`บันทึกจ่ายแล้ว ${r.length} คน`)},
   openTrip:d=>tripForm(d.v),
   closeTrip:d=>{const t=S.trips.find(x=>x.id===d.id);openForm({title:'ปิดรอบ · '+tripName(t),saveLabel:'ปิดรอบ',values:{end:TODAY<t.start?t.start:TODAY},
-    fields:[{k:'end',label:'วันเข้าฝั่ง',type:'date',req:1,full:1,validate:v=>v<t.start?'ต้องไม่ก่อนวันออกเรือ '+dmy(t.start):'',hint:'หลังปิดรอบ ระบบหักเงินเบิกของรอบนี้ออกจากเงินเดือนให้ แล้วกดจ่ายได้เลย'},{k:'note',label:'หมายเหตุ',type:'textarea',full:1}],
+    fields:[{k:'end',label:'วันเข้าฝั่ง',type:'date',req:1,full:1,validate:v=>v<t.start?'ต้องไม่ก่อนวันออกเรือ '+dmy(t.start):'',hint:'หลังปิดรอบ กดจ่ายเงินเดือนของรอบนี้ได้เลย (ระบบไม่หักเงินเบิกอัตโนมัติ)'},{k:'note',label:'หมายเหตุ',type:'textarea',full:1}],
     onSave:v=>{t.end=v.end;if(v.note)t.note=[t.note,v.note].filter(Boolean).join(' / ');const vs=V(t.vesselId);if(vs&&vs.status==='fishing')vs.status='docked';setTimeout(()=>{location.hash='#/trips/'+t.id},0)},done:'ปิดรอบแล้ว'})},
   editTrip:d=>{const t=S.trips.find(x=>x.id===d.id);openForm({title:'แก้ไข · '+tripName(t),values:t,
     fields:[{k:'start',label:'วันออกเรือ',type:'date',req:1},{k:'end',label:'วันเข้าฝั่ง',type:'date',hint:'เว้นว่าง = ยังไม่เข้าฝั่ง',validate:(v,vals)=>v&&v<vals.start?'ต้องไม่ก่อนวันออกเรือ':''},{k:'note',label:'หมายเหตุ',full:1}],
@@ -1186,6 +1234,9 @@ document.addEventListener('input',e=>{const t=e.target;if(t.dataset.fi){U[t.data
 document.addEventListener('keydown',e=>{if(e.key==='Escape'){if(FORM)closeModal();else $('#shell').classList.remove('open')}});
 window.addEventListener('hashchange',render);
 render();
+(function(){const today=()=>{const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`};
+  const chk=()=>{if(today()!==TODAY&&!FORM&&document.visibilityState!=='hidden')location.reload()};
+  document.addEventListener('visibilitychange',chk);window.addEventListener('focus',chk);setInterval(chk,60000)})();
 </script>
 </body>
 </html>
