@@ -220,6 +220,14 @@ td.nw{white-space:nowrap}
 .ck{display:flex;gap:8px;align-items:center;padding:5px 0;font-size:14px;cursor:pointer}.ck input{width:17px;height:17px;accent-color:var(--brand)}
 @media (max-width:520px){.checks{grid-template-columns:1fr}}
 .lnk{display:inline-flex;align-items:center;gap:4px;font-size:12.5px;color:var(--brand);text-decoration:none;font-weight:500;max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;vertical-align:middle}.lnk:hover{text-decoration:underline}.lnk svg.i{width:14px;height:14px}
+.shell>div{min-width:0}.main{min-width:0}.card{min-width:0}
+.mx .tw{overflow-x:auto}.mx table{min-width:100%}
+.mx th .sub{display:block;font-weight:400;font-size:12px;margin-top:2px;white-space:nowrap}
+.mx th.num,.mx td.num{min-width:118px}
+.mx th:first-child,.mx td:first-child{position:sticky;left:0;z-index:1;background:var(--surface);box-shadow:1px 0 0 var(--line)}
+.mx th:first-child{background:var(--surface2)}.mx tfoot td:first-child{background:var(--surface2)}
+.mx th.tot,.mx td:last-child{background:var(--brand-soft)}
+.rbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 18px 0;font-size:13.5px}.rbar .sel{height:36px}
 .dchips{display:flex;flex-wrap:wrap;gap:6px}
 .dchip{border:1px solid var(--line);background:var(--surface2);border-radius:8px;padding:3px 8px;font-size:13px;cursor:pointer;white-space:nowrap;font-variant-numeric:tabular-nums}
 .dchip:hover{border-color:var(--brand)}.dchip b{font-weight:600}
@@ -613,7 +621,7 @@ const iso=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${Str
 function dateList(a,b){const out=[];const d=new Date(a+'T00:00:00'),e=new Date(b+'T00:00:00');while(d<=e&&out.length<500){out.push(iso(d));d.setDate(d.getDate()+1)}return out}
 
 /* ---------- ui state ---------- */
-const U={aView:'list',sP:'cur',aP:'cur',eP:'cur',iQ:'',iC:'',iS:'',iTab:'items',dK:'',sT:'',aT:'',eT:'',tV:'',sM:CUR,sV:'',cM:CUR,cV:'',cS:'',cQ:'',pM:CUR,pV:'',aM:CUR,aV:'',eM:CUR,eV:'all',eC:'',dT:'crew',dS:'',rT:'sales',rM:CUR,rV:'',tab:'info',reveal:{}};
+const U={aR:{},aView:'list',sP:'cur',aP:'cur',eP:'cur',iQ:'',iC:'',iS:'',iTab:'items',dK:'',sT:'',aT:'',eT:'',tV:'',sM:CUR,sV:'',cM:CUR,cV:'',cS:'',cQ:'',pM:CUR,pV:'',aM:CUR,aV:'',eM:CUR,eV:'all',eC:'',dT:'crew',dS:'',rT:'sales',rM:CUR,rV:'',tab:'info',reveal:{}};
 const opt=(v,l,cur)=>`<option value="${esc(v)}"${String(v)===String(cur)?' selected':''}>${esc(l)}</option>`;
 const monthSel=(key,withAll)=>`<select class="sel" data-f="${key}" aria-label="เดือน">${withAll?opt('all','ทุกเดือน',U[key]):''}${months().map(m=>opt(m,mLabel(m),U[key])).join('')}</select>`;
 const vesselSel=(key,extra)=>`<select class="sel" data-f="${key}" aria-label="เรือ">${opt('','ทุกลำ',U[key])}${extra||''}${S.vessels.map(v=>opt(v.id,v.name,U[key])).join('')}</select>`;
@@ -760,7 +768,7 @@ function pPayroll(){
 function advTripKey(a){if(!a.vesselId)return 'none';const t=tripFor(a.vesselId,a.date);return t?t.id:'next:'+a.vesselId}
 function advRounds(vid){
   const trips=tripsOf(vid), advs=S.adv.filter(a=>a.vesselId===vid);
-  const cols=trips.map(t=>({key:t.id,t,label:'รอบที่ '+tripNo(t),sub:tripRangeTxt(t,true),rows:advs.filter(a=>inTrip(a,t))}));
+  const cols=trips.map(t=>({key:t.id,t,label:'รอบ '+tripNo(t),sub:tripRangeTxt(t,true),rows:advs.filter(a=>inTrip(a,t))}));
   const nx=advs.filter(a=>!tripFor(vid,a.date));
   if(nx.length)cols.push({key:'next:'+vid,t:null,label:'รอรอบถัดไป',sub:'ยังไม่เปิดรอบ',rows:nx});
   return cols;
@@ -773,18 +781,21 @@ function pAdvRounds(){
   const common=!U.aV?S.adv.filter(a=>!a.vesselId):[];
   if(!vs.length&&!common.length) return empty('ยังไม่มีการเบิกเงิน');
   return vs.map(v=>{
-    const cols=advRounds(v.id).filter(c=>c.rows.length||(c.t&&!c.t.end));
+    const all=advRounds(v.id).filter(c=>c.rows.length||(c.t&&!c.t.end));
+    const N=all.length, r0=U.aR[v.id]||{};let f=r0.f??Math.max(0,N-6), to=r0.t??N-1;f=Math.min(Math.max(0,f),N-1);to=Math.min(Math.max(f,to),N-1);
+    const cols=all.slice(f,to+1), rl=cols.length===1?cols[0].label:`${cols[0].label} – ${cols[cols.length-1].label.replace('รอบ ','')}`;
+    const rsel=k=>`<select class="sel" data-ar="${v.id}:${k}" aria-label="${k==='f'?'จากรอบ':'ถึงรอบ'}">${all.map((c,i)=>opt(i,c.label,k==='f'?f:to)).join('')}</select>`;
     const ids=[...new Set(cols.flatMap(c=>c.rows.map(a=>a.crewId)))];
     const cell=(cid,c)=>sum(c.rows.filter(a=>a.crewId===cid),a=>a.amount);
     const people=ids.map(cid=>({cid,c:C(cid),tot:sum(cols,col=>cell(cid,col))})).sort((a,b)=>b.tot-a.tot);
-    const head=[['ลูกเรือ'],...cols.map(c=>[`${c.label}<span class="sub" style="font-weight:400">${c.sub}</span>`,'num']),['รวมทุกรอบ','num']];
-    const matrix=people.length?tbl(head,people.map(p=>`<tr class="click" data-href="#/crew/${p.cid}"><td class="nw"><b>${esc(p.c?.name||'-')}</b></td>${cols.map(c=>{const x=cell(p.cid,c);return `<td class="num">${x?baht(x):'<span class="muted">-</span>'}</td>`}).join('')}<td class="num"><b>${baht(p.tot)}</b></td></tr>`),
-      `<tr><td>รวม ${people.length} คน</td>${cols.map(c=>`<td class="num">${baht(sum(c.rows,a=>a.amount))}</td>`).join('')}<td class="num">${baht(sum(people,p=>p.tot))}</td></tr>`):empty('ยังไม่มีการเบิกเงิน');
+    const head=[['ลูกเรือ'],...cols.map(c=>[`${c.label}<span class="sub">${c.sub}</span>`,'num']),[`รวม<span class="sub">${rl}</span>`,'num tot']];
+    const matrix=people.length?`<div class="mx">`+tbl(head,people.map(p=>`<tr class="click" data-href="#/crew/${p.cid}"><td class="nw"><b>${esc(p.c?.name||'-')}</b></td>${cols.map(c=>{const x=cell(p.cid,c);return `<td class="num">${x?baht(x):'<span class="muted">-</span>'}</td>`}).join('')}<td class="num"><b>${baht(p.tot)}</b></td></tr>`),
+      `<tr><td>รวม ${people.length} คน</td>${cols.map(c=>`<td class="num">${baht(sum(c.rows,a=>a.amount))}</td>`).join('')}<td class="num">${baht(sum(people,p=>p.tot))}</td></tr>`)+`</div>`:empty('ยังไม่มีการเบิกเงิน');
     const det=[...cols].reverse().map((c,i)=>{const g=advCrewDates(c.rows);
       return `<details class="rd"${i===0?' open':''}><summary><b>${c.label}</b> <span class="muted">${c.t?tripRange(c.t):c.sub}</span><span class="rs">${g.length} คน · ${c.rows.length} ครั้ง · <b>${baht(sum(c.rows,a=>a.amount))}</b></span></summary>
       ${g.length?tbl([['ลูกเรือ'],['วันที่เบิก (กดเพื่อแก้ไข)'],['รวม','num']],g.map(x=>`<tr><td class="nw"><a href="#/crew/${x.cid}" style="text-decoration:none"><b>${esc(x.c?.name||'-')}</b></a><span class="sub">${x.list.length} ครั้ง</span></td><td><div class="dchips">${x.list.map(advChip).join('')}</div></td><td class="num"><b>${baht(x.total)}</b></td></tr>`)):'<div class="empty">ไม่มีการเบิกในรอบนี้</div>'}</details>`}).join('');
-    return `<div class="card flush" style="margin-bottom:14px"><h2>${esc(v.name)} · เบิกแต่ละรอบ</h2><div class="mt">${matrix}</div></div>
-    <div class="card" style="margin-bottom:22px"><h2>${esc(v.name)} · รายละเอียดแต่ละรอบ</h2>${det}</div>`}).join('')+
+    return `<div class="card flush" style="margin-bottom:14px"><h2>${esc(v.name)} · เบิกแต่ละรอบ</h2><div class="rbar">${N>1?`<span>ดูตั้งแต่</span>${rsel('f')}<span>ถึง</span>${rsel('t')}<span class="muted">ยอดรวมคิดเฉพาะรอบที่เลือก</span>`:''}</div><div class="mt">${matrix}</div></div>
+    <div class="card" style="margin-bottom:22px"><h2>${esc(v.name)} · รายละเอียด ${rl}</h2>${det}</div>`}).join('')+
   (common.length?`<div class="card"><h2>ไม่ระบุเรือ</h2>${tbl([['ลูกเรือ'],['วันที่เบิก'],['รวม','num']],advCrewDates(common).map(x=>`<tr><td><b>${esc(x.c?.name||'-')}</b></td><td><div class="dchips">${x.list.map(advChip).join('')}</div></td><td class="num"><b>${baht(x.total)}</b></td></tr>`))}</div>`:'');
 }
 function pAdvances(){
@@ -1237,6 +1248,8 @@ document.addEventListener('click',e=>{
 document.addEventListener('change',e=>{const t=e.target;
   if(t.closest('#modal')) return;
   if(t.dataset.f!==undefined){U[t.dataset.f]=t.value;const pk=PKEYS[t.dataset.f];if(pk&&String(U[pk]).startsWith('t:')){const tr=S.trips.find(y=>y.id===U[pk].slice(2));if(!tr||(t.value&&t.value!=='all'&&tr.vesselId!==t.value))U[pk]='cur'}render()}
+  else if(t.dataset.ar){const [vid,k]=t.dataset.ar.split(':');const r=U.aR[vid]=Object.assign({},U.aR[vid]);
+    const sel=[...document.querySelectorAll(`[data-ar^="${vid}:"]`)];sel.forEach(x=>r[x.dataset.ar.split(':')[1]]=+x.value);r[k]=+t.value;if(r.f>r.t){if(k==='f')r.t=r.f;else r.f=r.t}render()}
   else if(t.dataset.crewStatus){const id=t.dataset.crewStatus;(S.status[id]=S.status[id]||{})[U.cM]=t.value;if(t.value==='resigned')C(id).events.push({date:TODAY,text:'ลาออก'});save();render();toast('บันทึกสถานะแล้ว')}
   else if(t.dataset.vstatus){V(t.dataset.vstatus).status=t.value;save();render();toast('เปลี่ยนสถานะเรือแล้ว')}
 });
